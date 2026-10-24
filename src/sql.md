@@ -16,7 +16,11 @@ import {parquet} from "./components/parquet.js";
 const db = DuckDBClient.of({
   palavras: parquet(FileAttachment("data/palavras.parquet")),
   frases: parquet(FileAttachment("data/frases.parquet")),
-  cobertura: parquet(FileAttachment("data/cobertura.parquet"))
+  cobertura: parquet(FileAttachment("data/cobertura.parquet")),
+  conceitos: parquet(FileAttachment("data/poliglota/conceitos.parquet")),
+  pares: parquet(FileAttachment("data/poliglota/pares.parquet")),
+  vantagem: parquet(FileAttachment("data/poliglota/vantagem.parquet")),
+  falsos_amigos: parquet(FileAttachment("data/poliglota/falsos-amigos.parquet"))
 });
 ```
 
@@ -43,6 +47,17 @@ FROM palavras
 WHERE rank <= 2000
 ORDER BY n_formas DESC
 LIMIT 20`],
+  ["Substantivos iguais nas línguas românicas e no português", `SELECT rank_en, palavra_pt, palavra_es, palavra_fr, palavra_it
+FROM conceitos
+WHERE classe = 'noun'
+  AND vs_pt_es = 'igual' AND vs_pt_it = 'igual'
+ORDER BY rank_en
+LIMIT 40`],
+  ["Vantagem a partir do português", `SELECT alvo, round(reconhecivel * 100, 1) AS reconhecivel_pct,
+       round(mesma_origem * 100, 1) AS mesma_origem_pct, reconheciveis_top1000
+FROM vantagem
+WHERE origem = 'pt'
+ORDER BY reconhecivel DESC`],
   ["Frases mais fáceis para as palavras 1.001–1.100 do alemão", `SELECT f.rank, f.lema, f.texto, f.traducao, f.dificuldade
 FROM frases f
 WHERE f.lingua = 'de' AND f.ordem = 1 AND f.rank BETWEEN 1001 AND 1100
@@ -74,7 +89,7 @@ resultado.error ? null : Inputs.table(resultado.rows, {rows: 20, locale: "pt-BR"
 
 ```js
 const esquema = await Promise.all(
-  ["palavras", "frases", "cobertura"].map(async (t) => ({
+  ["palavras", "frases", "cobertura", "conceitos", "pares", "vantagem", "falsos_amigos"].map(async (t) => ({
     tabela: t,
     linhas: Number(Array.from(await db.query(`SELECT count(*) AS n FROM ${t}`))[0].n),
     colunas: Array.from(await db.query(`DESCRIBE ${t}`), (c) => `${c.column_name} (${c.column_type.toLowerCase()})`).join(", ")

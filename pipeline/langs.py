@@ -27,6 +27,11 @@ class Lang:
     # The frequency lists split "don't" into "don" and "'t"; without this,
     # "don" would be counted as the verb "to don".
     contracoes: dict[str, str] = field(default_factory=dict)
+    freq: str = ""  # FrequencyWords folder, when it differs from ``code``
+
+    @property
+    def freq_code(self) -> str:
+        return self.freq or self.code
 
 
 LANGS: dict[str, Lang] = {
@@ -72,8 +77,9 @@ def classe(pos: str | None) -> str:
     return CLASSES.get(pos or "", "outra")
 
 
-# The reader's language, for Tatoeba's sentence translations.
-PT = Lang("pt", "Português", "Portuguese", "por", "pt_BR")
+# The reader's language: Tatoeba's sentence translations, and the starting
+# point of the Poliglota comparisons (Brazilian subtitles for frequencies).
+PT = Lang("pt", "Português", "Portuguese", "por", "pt_BR", freq="pt_br")
 
 
 def selected() -> list[Lang]:

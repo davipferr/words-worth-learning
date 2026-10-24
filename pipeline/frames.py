@@ -18,9 +18,9 @@ from pathlib import Path
 
 import polars as pl
 
-from . import examples, freq, lexicon, tatoeba, ud, wiktionary
+from . import cognates, conceitos, examples, freq, lexicon, tatoeba, ud, wiktionary
 from .http import CACHE_DIR, log
-from .langs import PT, Lang
+from .langs import LANGS, PT, Lang
 from .schema import require_columns
 
 FRAMES = CACHE_DIR / "frames"
@@ -78,7 +78,7 @@ def dicionario(lang: Lang) -> pl.DataFrame:
     """English-Wiktionary entries of the language, for words that occur in its subtitles."""
 
     def build() -> pl.DataFrame:
-        keep = set(formas(lang.code)["forma"].to_list()) | set(lang.contracoes.values())
+        keep = set(formas(lang.freq_code)["forma"].to_list()) | set(lang.contracoes.values())
         log(f"parsing Wiktionary ({lang.kaikki}) for {len(keep):,} subtitle forms")
         return require_columns(wiktionary.entries_en(lang.kaikki, keep), ["palavra", "pos", "glosas", "forma_de"], f"kaikki {lang.kaikki}", min_rows=5_000)
 
@@ -222,3 +222,167 @@ def cobertura(lang: Lang) -> pl.DataFrame:
 
 def total_tokens(lang: Lang) -> int:
     return int(formas(lang.code)["contagem"].sum())
+
+
+# ----------------------------------------------------------------- poliglota
+
+VOCAB_TOP = 10_000  # words of each language eligible for alignment
+PT_TOP_FORMS = 30_000  # Portuguese has no lemma ranking: its most frequent subtitle forms
+
+VOCAB_SCHEMA = {
+    "palavra": pl.String, "rank": pl.Int64, "share": pl.Float64, "pos": pl.List(pl.String), "heads": pl.List(pl.String),
+    "first_head": pl.String, "first_heads": pl.List(pl.String), "forma_de": pl.List(pl.String), "etimos": pl.List(pl.String), "cognatos": pl.List(pl.String),
+    "glosas": pl.List(pl.String), "traducoes": pl.List(pl.String),
+}  # fmt: skip
+
+
+def _vocab_row(palavra: str, rank: int, share: float, every: list, main: list, english: bool = False) -> dict:
+    lemma_entries = [e for e in every if e.is_lemma]
+    heads = {h for e in lemma_entries for g in e.glosas for h in cognates.gloss_heads(g)}
+    if english:
+        # English entries are defined in full sentences ("A wheeled vehicle…"),
+        # not glossed; the word itself is its meaning in English.
+        heads.add(palavra.lower())
+    glosas = [g for e in main for g in e.glosas]
+    first = cognates.gloss_heads(glosas[0]) if glosas else set()
+    return {
+        "palavra": palavra,
+        "rank": rank,
+        "share": share,
+        "pos": sorted({e.pos for e in main}),
+        "heads": sorted(heads),
+        # The first definition's first piece: "perro" -> "dog".
+        "first_head": next(iter(sorted(first, key=lambda h: glosas[0].lower().find(h))), None) if first else None,
+        "first_heads": sorted(first),
+        "forma_de": sorted({t for e in every for t in e.forma_de}),
+        "etimos": list(dict.fromkeys(k for e in every for k in e.etimos)),
+        "cognatos": list(dict.fromkeys(k for e in every for k in e.cognatos)),
+        "glosas": glosas[:4],
+        # Only the main part of speech: "will" the modal verb has no table,
+        # and its noun's ("arbítrio") would be wrong.
+        "traducoes": list(dict.fromkeys(t for e in main if e.pos == main[0].pos for t in e.traducoes)),
+    }
+
+
+def vocabulario(lang: Lang) -> pl.DataFrame:
+    """The words of a language eligible for the Poliglota alignment, with
+    what alignment needs: English gloss heads, ancestors, cognates, translations."""
+
+    def build() -> pl.DataFrame:
+        idx = lexicon.index(dicionario(lang))
+        rows = []
+        if lang.code == "pt":
+            fm = formas(lang.freq_code)
+            total = fm["contagem"].sum()
+            for rank, (forma, contagem) in enumerate(fm.head(PT_TOP_FORMS).iter_rows(), 1):
+                every = idx.get(forma, [])
+                main = lexicon.main_entries(every, forma)
+                if main and not main[0].is_letter:
+                    rows.append(_vocab_row(lexicon._lemma_word(every, forma), rank, contagem / total, every, main))
+        else:
+            total = total_tokens(lang)
+            upos = upos_by_lemma(lang)
+            for lema, rank, contagem in lemas(lang).filter(pl.col("rank") <= VOCAB_TOP).select("lema", "rank", "contagem").iter_rows():
+                every = idx[lema.lower()]
+                main = lexicon.main_entries(every, lema, upos.get(lema.lower()))
+                rows.append(_vocab_row(lema, rank, contagem / total, every, main, english=lang.code == "en"))
+        return pl.DataFrame(rows, schema=VOCAB_SCHEMA)
+
+    return memo(f"vocabulario-{lang.code}", build)
+
+
+def _words(lang: Lang) -> dict[str, conceitos.Word]:
+    out: dict[str, conceitos.Word] = {}
+    for r in vocabulario(lang).iter_rows(named=True):
+        key = r["palavra"].lower()
+        if key not in out:
+            r = dict(r)
+            r.pop("traducoes")
+            out[key] = conceitos.Word(lang=lang.code, **{k: set(v) if isinstance(v, list) and k != "glosas" else v for k, v in r.items()})
+    return out
+
+
+def _all_words() -> dict[str, dict[str, conceitos.Word]]:
+    return {code: _words(PT if code == "pt" else LANGS[code]) for code in conceitos.ORIGENS}
+
+
+def alinhamento() -> pl.DataFrame:
+    """One row per concept (the 5,000 most frequent English words): its word,
+    rank and confirmation in each language."""
+
+    def build() -> pl.DataFrame:
+        words = _all_words()
+        en = vocabulario(LANGS["en"]).filter(pl.col("rank") <= TOP_WORDS)
+        concepts = [conceitos.Concept(r["palavra"], (r["pos"] or ["?"])[0], r["rank"], r["traducoes"]) for r in en.iter_rows(named=True)]
+        # Part of speech as the English entry's main one (first in main_entries order).
+        main_pos = {r["palavra"]: r["pos"] for r in en.iter_rows(named=True)}
+        idx_en = lexicon.index(dicionario(LANGS["en"]))
+        upos = upos_by_lemma(LANGS["en"])
+        for c in concepts:
+            main = lexicon.main_entries(idx_en[c.conceito.lower()], c.conceito, upos.get(c.conceito.lower()))
+            c.classe = main[0].pos if main else (main_pos[c.conceito] or ["?"])[0]
+        rows = []
+        for r in conceitos.align(concepts, words):
+            row = {"conceito": r["conceito"], "classe": r["classe"], "rank_en": r["rank_en"]}
+            for code in conceitos.ORIGENS:
+                w = r.get(code)
+                row[f"palavra_{code}"] = w.palavra if w else None
+                row[f"rank_{code}"] = w.rank if w else None
+                row[f"confirmada_{code}"] = None if code == "en" else (r[f"ok_{code}"] if w else None)
+            rows.append(row)
+        return pl.DataFrame(rows, infer_schema_length=None)
+
+    return memo("poliglota-alinhamento", build)
+
+
+def _aligned_words() -> list[dict]:
+    """``alinhamento`` with Word objects back in place, for the measures."""
+    words = _all_words()
+    out = []
+    for r in alinhamento().iter_rows(named=True):
+        row = {"conceito": r["conceito"]}
+        for code in conceitos.ORIGENS:
+            p = r[f"palavra_{code}"]
+            row[code] = words[code].get(p.lower()) if p else None
+        out.append(row)
+    return out
+
+
+def pares() -> pl.DataFrame:
+    """Every language pair of every concept, classified (igual, parecida…)."""
+    return memo("poliglota-pares", lambda: pl.DataFrame(conceitos.pairs(_aligned_words()), infer_schema_length=None))
+
+
+def vantagem() -> pl.DataFrame:
+    """The advantage matrix: what knowing language A gives you of language B."""
+    return memo("poliglota-vantagem", lambda: pl.DataFrame(conceitos.advantage(_aligned_words(), _all_words(), top=TOP_WORDS)))
+
+
+def falsos_amigos() -> pl.DataFrame:
+    """Same spelling, different meaning, between any two of the six languages."""
+
+    def build() -> pl.DataFrame:
+        p = pares()
+        linked = {(r[0], r[1], r[2], r[3]) for r in p.select("lingua_a", "palavra_a", "lingua_b", "palavra_b").iter_rows()}
+        schema = {"lingua_a": pl.String, "palavra_a": pl.String, "rank_a": pl.Int64, "sentido_a": pl.String, "lingua_b": pl.String, "palavra_b": pl.String, "rank_b": pl.Int64, "sentido_b": pl.String}
+        return pl.DataFrame(conceitos.false_friend_pairs(_all_words(), linked, top=TOP_WORDS), schema=schema)
+
+    return memo("poliglota-falsos-amigos", build)
+
+
+def conceitos_lado_a_lado() -> pl.DataFrame:
+    """The alignment in wide form for the site: each language's word, its class
+    against Portuguese (igual, parecida…) and its IPA."""
+
+    def build() -> pl.DataFrame:
+        a = alinhamento()
+        p = pares().filter(pl.col("lingua_a") == "pt").select("conceito", "lingua_b", "classe")
+        out = a
+        for code in conceitos.ALVOS:
+            vs_pt = p.filter(pl.col("lingua_b") == code).select("conceito", pl.col("classe").alias(f"vs_pt_{code}"))
+            ipa = lemas(LANGS[code]).filter(pl.col("rank") <= VOCAB_TOP).select(pl.col("lema").alias(f"palavra_{code}"), pl.col("ipa").alias(f"ipa_{code}"))
+            out = out.join(vs_pt, on="conceito", how="left").join(ipa, on=f"palavra_{code}", how="left")
+        targets = [f"palavra_{c}" for c in conceitos.ALVOS if c != "en"]
+        return out.with_columns(pl.sum_horizontal([pl.col(t).is_not_null() for t in targets]).alias("n_linguas")).sort("rank_en")
+
+    return memo("poliglota-conceitos", build)

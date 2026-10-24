@@ -40,6 +40,9 @@ class Entry:
     genero: str | None
     ipa: str | None
     etimo: str | None
+    etimos: list[str]
+    cognatos: list[str]
+    traducoes: list[str]
 
     @property
     def is_lemma(self) -> bool:

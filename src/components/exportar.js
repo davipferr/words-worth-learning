@@ -54,3 +54,20 @@ export function baixar(nome, texto) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return nome;
 }
+
+const LINGUAS_POLIGLOTA = [["en", "Inglês"], ["es", "Espanhol"], ["fr", "Francês"], ["it", "Italiano"], ["de", "Alemão"]];
+
+/** Concepts as an Anki text import: Portuguese word in front, five languages behind. */
+export function tsvPoliglota(conceitos) {
+  const linhas = ["#separator:tab", "#html:true", "#guid column:1", "#tags column:4", "#columns:GUID\tFrente\tVerso\tTags"];
+  for (const c of [...conceitos].sort((a, b) => a.rank_en - b.rank_en)) {
+    const frente = `<div style="font-size:2em">${esc(c.palavra_pt ?? c.conceito)}</div><div style="opacity:.6">${esc(c.classe_pt)}</div>`;
+    const verso = LINGUAS_POLIGLOTA.map(([code, nome]) => {
+      const marca = c[`vs_pt_${code}`] && c[`vs_pt_${code}`] !== "diferente" ? ` <span style="opacity:.6;font-size:.8em">(${esc(c[`vs_pt_${code}`])})</span>` : "";
+      return `<div><span style="opacity:.6">${nome}:</span> ${esc(c[`palavra_${code}`] ?? "—")}${marca}</div>`;
+    }).join("");
+    // Its own GUID namespace: never collides with the .apkg deck's notes.
+    linhas.push([`wwl-poli-txt-${c.conceito}-${c.classe}`, frente, verso, `wwl::poliglota classe::${c.classe_pt.replace(/ /g, "_")}`].map(campo).join("\t"));
+  }
+  return linhas.join("\n") + "\n";
+}

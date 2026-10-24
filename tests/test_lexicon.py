@@ -6,7 +6,10 @@ from pipeline.wiktionary import SCHEMA
 
 
 def entry(palavra, pos, glosas=(), forma_de=(), genero=None):
-    return {"palavra": palavra, "pos": pos, "glosas": list(glosas), "forma_de": list(forma_de), "genero": genero, "ipa": None, "etimo": None}
+    return {
+        "palavra": palavra, "pos": pos, "glosas": list(glosas), "forma_de": list(forma_de), "genero": genero,
+        "ipa": None, "etimo": None, "etimos": [], "cognatos": [], "traducoes": [],
+    }  # fmt: skip
 
 
 DIC = pl.DataFrame(

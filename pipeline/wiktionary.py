@@ -5,6 +5,12 @@ largest: it links every inflected form to its lemma ("estoy" -> "estar") and
 has part of speech, definitions (in English), pronunciation, gender and
 etymology. Definitions are shown as Wiktionary writes them, untranslated.
 
+For the Poliglota section two more fields link words across languages
+without translating anything for the reader: English entries' translation
+tables ("dog" -> es "perro", it "cane"…), which define the shared concepts,
+and each entry's etymological ancestors and cognates (Latin *canis*), which
+tell words of the same origin apart from look-alikes.
+
 Dumps are JSON Lines, one entry (word + part of speech + etymology) per line.
 They are big (the English one is 530 MB gzipped), so each is parsed once into
 a compact table, keeping only words that occur in the language's subtitles.
@@ -13,6 +19,7 @@ a compact table, keeping only words that occur in the language's subtitles.
 from __future__ import annotations
 
 import gzip
+import re
 from collections.abc import Iterable, Iterator
 from datetime import timedelta
 from pathlib import Path
@@ -22,12 +29,18 @@ import orjson
 import polars as pl
 
 from .http import download
+from .text import fold
 
 # Senses with these tags are dropped when an entry has other senses: a learner
 # wants "casa = house", not the 17th-century meaning.
 MARGINAL = {"obsolete", "archaic", "dated", "rare", "historical", "nonstandard", "misspelling"}
 GENEROS = {"masculine": "m", "feminine": "f", "neuter": "n"}
 MAX_GLOSAS = 6
+# Languages whose translations are kept from English entries' tables.
+TRAD_LANGS = ("es", "fr", "it", "de", "pt")
+TRAD_PER_LANG = 4
+# Etymology templates that name an ancestor: inherited, derived, borrowed…
+ANCESTOR_TEMPLATES = {"inh", "inh+", "der", "der+", "bor", "bor+", "lbor", "ubor", "slbor", "obor", "uder", "cal", "lbor+"}
 # kaikki.org re-extracts the dumps every few weeks; Wiktionary's entries for
 # common words barely change, and the English dump is 530 MB.
 MAX_AGE = timedelta(days=90)
@@ -40,6 +53,12 @@ SCHEMA = {
     "genero": pl.String,
     "ipa": pl.String,
     "etimo": pl.String,
+    # "la:canis", "gem-pro:husa": ancestors named in the etymology, folded.
+    "etimos": pl.List(pl.String),
+    # "pt:cao": words Wiktionary calls cognates.
+    "cognatos": pl.List(pl.String),
+    # "es:perro": translations from the entry's tables (English entries only).
+    "traducoes": pl.List(pl.String),
 }
 
 
@@ -72,6 +91,47 @@ def _ipa(sounds: list[dict]) -> str | None:
     return (phonemic or us or ipas)[0]["ipa"]
 
 
+_PAREN = re.compile(r"\([^)]*\)")
+
+
+def _key(lang: str, word: str) -> str:
+    """"la", "*hūsą" -> "la:husa": comparable across entries."""
+    return f"{lang}:{fold(word.strip().lstrip('*'))}"
+
+
+def _etymology(entry: dict) -> tuple[list[str], list[str]]:
+    ancestors: list[str] = []
+    cognates: list[str] = []
+    for t in entry.get("etymology_templates") or []:
+        args = t.get("args") or {}
+        name = t.get("name")
+        if name in ANCESTOR_TEMPLATES and args.get("2") and args.get("3") and args["3"] != "-":
+            ancestors.append(_key(args["2"], args["3"]))
+        elif name in ("cog", "noncog") and args.get("1") and args.get("2"):
+            cognates.append(_key(args["1"], args["2"]))
+    return list(dict.fromkeys(ancestors))[:10], list(dict.fromkeys(cognates))[:16]
+
+
+def _translations(entry: dict) -> list[str]:
+    """Translations into ``TRAD_LANGS``, "lang:word", most senses first.
+
+    Tables have one row per sense, in no reliable order (English "go" lists
+    "dizer", to say, before "ir"); a word listed under many senses is the
+    general translation ("ir" appears under most senses of "go").
+    """
+    senses: dict[tuple[str, str], set] = {}
+    for t in [*(entry.get("translations") or []), *(t for s in entry.get("senses") or [] for t in s.get("translations") or [])]:
+        lang = t.get("lang_code")
+        word = _PAREN.sub("", t.get("word") or "").strip()  # "(o) teu" -> "teu"
+        if lang in TRAD_LANGS and word and " " not in word:
+            senses.setdefault((lang, word), set()).add(t.get("sense"))
+    out: list[str] = []
+    for lang in TRAD_LANGS:
+        ranked = sorted((w for (lg, w) in senses if lg == lang), key=lambda w: -len(senses[(lang, w)]))  # stable: ties keep table order
+        out += [f"{lang}:{w}" for w in ranked[:TRAD_PER_LANG]]
+    return out
+
+
 def compact(entry: dict) -> dict:
     """One English-Wiktionary entry -> the fields the pipeline uses."""
     lemma_senses, forma_de, generos = [], [], []
@@ -93,6 +153,7 @@ def compact(entry: dict) -> dict:
     # First sentence of the etymology ("From Latin canis."), as written.
     etimo = (entry.get("etymology_text") or "").split(". ")[0].strip().rstrip(".")[:200] or None
 
+    etimos, cognatos = _etymology(entry)
     return {
         "palavra": entry.get("word"),
         "pos": entry.get("pos"),
@@ -101,6 +162,9 @@ def compact(entry: dict) -> dict:
         "genero": "/".join(dict.fromkeys(generos)) or None,
         "ipa": _ipa(entry.get("sounds") or []),
         "etimo": etimo,
+        "etimos": etimos,
+        "cognatos": cognatos,
+        "traducoes": _translations(entry),
     }
 
 

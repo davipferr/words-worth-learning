@@ -5,11 +5,11 @@ title: Baralhos Anki
 # Baralhos para o Anki
 
 ```js
-import {parquet} from "./components/parquet.js";
-import {destaque, GENEROS, LINGUAS, num, rows} from "./components/format.js";
+import {parquet} from "../components/parquet.js";
+import {destaque, GENEROS, LINGUAS, num, rows} from "../components/format.js";
 
-const resumo = await FileAttachment("data/resumo.json").json();
-const palavras = rows(await parquet(FileAttachment("data/palavras.parquet")));
+const resumo = await FileAttachment("../data/resumo.json").json();
+const palavras = rows(await parquet(FileAttachment("../data/palavras.parquet")));
 ```
 
 O [Anki](https://apps.ankiweb.net) é um aplicativo gratuito de cartões com repetição espaçada: ele mostra cada cartão logo antes de você esquecê-lo. Cada língua tem ${num(resumo.palavras_por_lingua)} palavras em baralhos por faixa de frequência. Comece pela primeira faixa: os cartões novos aparecem na ordem de frequência.
@@ -18,31 +18,31 @@ O [Anki](https://apps.ankiweb.net) é um aplicativo gratuito de cartões com rep
 // FileAttachment names must be literal, so every deck is listed here; they
 // are extracted on demand from data/decks.zip (built by src/data/decks.zip.py).
 const arquivos = {
-  "en-0001-0500.apkg": FileAttachment("data/decks/en-0001-0500.apkg"),
-  "en-0501-1000.apkg": FileAttachment("data/decks/en-0501-1000.apkg"),
-  "en-1001-2000.apkg": FileAttachment("data/decks/en-1001-2000.apkg"),
-  "en-2001-3000.apkg": FileAttachment("data/decks/en-2001-3000.apkg"),
-  "en-3001-5000.apkg": FileAttachment("data/decks/en-3001-5000.apkg"),
-  "es-0001-0500.apkg": FileAttachment("data/decks/es-0001-0500.apkg"),
-  "es-0501-1000.apkg": FileAttachment("data/decks/es-0501-1000.apkg"),
-  "es-1001-2000.apkg": FileAttachment("data/decks/es-1001-2000.apkg"),
-  "es-2001-3000.apkg": FileAttachment("data/decks/es-2001-3000.apkg"),
-  "es-3001-5000.apkg": FileAttachment("data/decks/es-3001-5000.apkg"),
-  "fr-0001-0500.apkg": FileAttachment("data/decks/fr-0001-0500.apkg"),
-  "fr-0501-1000.apkg": FileAttachment("data/decks/fr-0501-1000.apkg"),
-  "fr-1001-2000.apkg": FileAttachment("data/decks/fr-1001-2000.apkg"),
-  "fr-2001-3000.apkg": FileAttachment("data/decks/fr-2001-3000.apkg"),
-  "fr-3001-5000.apkg": FileAttachment("data/decks/fr-3001-5000.apkg"),
-  "it-0001-0500.apkg": FileAttachment("data/decks/it-0001-0500.apkg"),
-  "it-0501-1000.apkg": FileAttachment("data/decks/it-0501-1000.apkg"),
-  "it-1001-2000.apkg": FileAttachment("data/decks/it-1001-2000.apkg"),
-  "it-2001-3000.apkg": FileAttachment("data/decks/it-2001-3000.apkg"),
-  "it-3001-5000.apkg": FileAttachment("data/decks/it-3001-5000.apkg"),
-  "de-0001-0500.apkg": FileAttachment("data/decks/de-0001-0500.apkg"),
-  "de-0501-1000.apkg": FileAttachment("data/decks/de-0501-1000.apkg"),
-  "de-1001-2000.apkg": FileAttachment("data/decks/de-1001-2000.apkg"),
-  "de-2001-3000.apkg": FileAttachment("data/decks/de-2001-3000.apkg"),
-  "de-3001-5000.apkg": FileAttachment("data/decks/de-3001-5000.apkg")
+  "en-0001-0500.apkg": FileAttachment("../data/decks/en-0001-0500.apkg"),
+  "en-0501-1000.apkg": FileAttachment("../data/decks/en-0501-1000.apkg"),
+  "en-1001-2000.apkg": FileAttachment("../data/decks/en-1001-2000.apkg"),
+  "en-2001-3000.apkg": FileAttachment("../data/decks/en-2001-3000.apkg"),
+  "en-3001-5000.apkg": FileAttachment("../data/decks/en-3001-5000.apkg"),
+  "es-0001-0500.apkg": FileAttachment("../data/decks/es-0001-0500.apkg"),
+  "es-0501-1000.apkg": FileAttachment("../data/decks/es-0501-1000.apkg"),
+  "es-1001-2000.apkg": FileAttachment("../data/decks/es-1001-2000.apkg"),
+  "es-2001-3000.apkg": FileAttachment("../data/decks/es-2001-3000.apkg"),
+  "es-3001-5000.apkg": FileAttachment("../data/decks/es-3001-5000.apkg"),
+  "fr-0001-0500.apkg": FileAttachment("../data/decks/fr-0001-0500.apkg"),
+  "fr-0501-1000.apkg": FileAttachment("../data/decks/fr-0501-1000.apkg"),
+  "fr-1001-2000.apkg": FileAttachment("../data/decks/fr-1001-2000.apkg"),
+  "fr-2001-3000.apkg": FileAttachment("../data/decks/fr-2001-3000.apkg"),
+  "fr-3001-5000.apkg": FileAttachment("../data/decks/fr-3001-5000.apkg"),
+  "it-0001-0500.apkg": FileAttachment("../data/decks/it-0001-0500.apkg"),
+  "it-0501-1000.apkg": FileAttachment("../data/decks/it-0501-1000.apkg"),
+  "it-1001-2000.apkg": FileAttachment("../data/decks/it-1001-2000.apkg"),
+  "it-2001-3000.apkg": FileAttachment("../data/decks/it-2001-3000.apkg"),
+  "it-3001-5000.apkg": FileAttachment("../data/decks/it-3001-5000.apkg"),
+  "de-0001-0500.apkg": FileAttachment("../data/decks/de-0001-0500.apkg"),
+  "de-0501-1000.apkg": FileAttachment("../data/decks/de-0501-1000.apkg"),
+  "de-1001-2000.apkg": FileAttachment("../data/decks/de-1001-2000.apkg"),
+  "de-2001-3000.apkg": FileAttachment("../data/decks/de-2001-3000.apkg"),
+  "de-3001-5000.apkg": FileAttachment("../data/decks/de-3001-5000.apkg")
 };
 const linguas = LINGUAS.filter((l) => resumo.linguas.some((r) => r.codigo === l.codigo));
 ```

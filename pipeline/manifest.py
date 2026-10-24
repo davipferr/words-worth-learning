@@ -51,6 +51,7 @@ def sources() -> list[dict]:
             *[_source(f"Universal Dependencies — {lang.ud.split('/')[0]}", u) for u in ud.urls(lang.ud)[:1]],
         ]
     out.append(_source("Tatoeba — frases em português", tatoeba.sentences_url(PT.tatoeba)))
+    out.append(_source("Wiktionary (kaikki.org) — Português", wiktionary.url_en(PT.kaikki)))
     return out
 
 
@@ -69,6 +70,16 @@ def build() -> dict:
             "cobertura_1000_pct": round(float(cov.filter(pl.col("rank") == 1000)["cobertura"][0]) * 100, 2),
             "cobertura_5000_pct": round(float(cov.filter(pl.col("rank") == 5000)["cobertura"][0]) * 100, 2),
         }
+    conc = frames.conceitos_lado_a_lado()
+    vant = frames.vantagem()
+    tabelas["poliglota"] = {
+        "linhas": conc.height,
+        "colunas": conc.columns,
+        "conceitos_completos": conc.filter(pl.col("palavra_pt").is_not_null(), pl.col("n_linguas") == 4).height,
+        "pares": frames.pares().height,
+        "falsos_amigos": frames.falsos_amigos().height,
+        **{f"pt_{r['alvo']}_reconhecivel_pct": round(r["reconhecivel"] * 100, 2) for r in vant.filter(pl.col("origem") == "pt").iter_rows(named=True)},
+    }
     return {
         "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "commit": os.environ.get("GITHUB_SHA"),

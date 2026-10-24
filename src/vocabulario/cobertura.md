@@ -5,13 +5,13 @@ title: Cobertura
 # Quantas palavras são suficientes?
 
 ```js
-import {parquet} from "./components/parquet.js";
-import {LINGUAS, num, pct, pctd, rows} from "./components/format.js";
-import {palette} from "./components/palette.js";
-import {curvas, ganhos, legenda} from "./components/charts.js";
+import {parquet} from "../components/parquet.js";
+import {LINGUAS, num, pct, pctd, rows} from "../components/format.js";
+import {palette} from "../components/palette.js";
+import {curvas, ganhos, legenda} from "../components/charts.js";
 
-const cobertura = rows(await parquet(FileAttachment("data/cobertura.parquet")));
-const resumo = await FileAttachment("data/resumo.json").json();
+const cobertura = rows(await parquet(FileAttachment("../data/cobertura.parquet")));
+const resumo = await FileAttachment("../data/resumo.json").json();
 ```
 
 ```js

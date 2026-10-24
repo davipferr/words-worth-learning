@@ -144,6 +144,10 @@ def deck_bytes(rows: list[dict], lang: Lang, band: tuple[int, int]) -> bytes:
     for r in sorted(rows, key=lambda r: r["rank"]):
         if band[0] <= r["rank"] <= band[1]:
             deck.add_note(note(r, lang, mdl))
+    return package(deck)
+
+
+def package(deck: genanki.Deck) -> bytes:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "deck.apkg"
         # A fixed timestamp keeps rebuilt decks byte-identical when nothing changed.
@@ -164,3 +168,110 @@ def archive(decks: dict[str, bytes]) -> bytes:
         for name, data in decks.items():
             zf.writestr(zipfile.ZipInfo(name, date_time=(2024, 1, 1, 0, 0, 0)), data)
     return buf.getvalue()
+
+
+# ----------------------------------------------------------------- poliglota
+#
+# One note per concept (see ``conceitos``): the Portuguese word on the front,
+# the word in each of the five languages on the back, each marked by how much
+# it looks like the Portuguese one. Studying them together shows the patterns
+# ("-ción", "-zione", "-tion" all are "-ção").
+
+POLIGLOTA_MODEL_ID = 1726448999
+POLIGLOTA_DECK = f"{ROOT_DECK}::Poliglota"
+POLIGLOTA_FILE = "poliglota.apkg"
+LINGUAS_DECK = [("en", "Inglês", "en_US"), ("es", "Espanhol", "es_ES"), ("fr", "Francês", "fr_FR"), ("it", "Italiano", "it_IT"), ("de", "Alemão", "de_DE")]
+MARCAS = {"igual": "igual ao português", "parecida": "parecida", "mesma origem": "mesma origem", "diferente": ""}
+
+def _campo(lang_nome: str) -> str:
+    """Anki field name for a language: ASCII, "Francês" -> "Frances"."""
+    return lang_nome.replace("ê", "e").replace("ã", "a")
+
+
+POLIGLOTA_FRONT = """<div class="palavra">{{Portugues}}</div>
+<div class="classe">{{Classe}} · em inglês: {{Conceito}}</div>"""
+
+POLIGLOTA_BACK = (
+    """{{FrontSide}}
+<hr id="answer">
+<table class="linguas">"""
+    + "".join(f"""
+<tr><th>{nome}</th><td>{{{{{_campo(nome)}}}}}</td><td class="tts">{{{{#{_campo(nome)}Texto}}}}{{{{tts {voz}:{_campo(nome)}Texto}}}}{{{{/{_campo(nome)}Texto}}}}</td></tr>""" for _, nome, voz in LINGUAS_DECK)
+    + """
+</table>
+<div class="posicao">{{Posicao}}</div>"""
+)
+
+POLIGLOTA_CSS = (
+    CSS
+    + """
+.linguas { margin: 12px auto; border-collapse: collapse; font-size: 20px; }
+.linguas th { text-align: right; font-weight: 400; font-size: 13px; color: #7a7974; padding: 4px 12px 4px 0; }
+.linguas td { text-align: left; padding: 4px 0; }
+.linguas td.tts { padding-left: 8px; }
+.ipa-mini { font-size: 13px; color: #7a7974; margin-left: 6px; }
+.marca { font-size: 11px; border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
+.marca.igual { background: #1baf7a; color: #fff; }
+.marca.parecida { background: #2a78d6; color: #fff; }
+.marca.origem { border: 1px solid #7a7974; color: #7a7974; }"""
+)
+
+
+def poliglota_model() -> genanki.Model:
+    fields = ["Portugues", "Conceito", "Classe"]
+    for _, nome, _ in LINGUAS_DECK:
+        fields += [_campo(nome), f"{_campo(nome)}Texto"]
+    fields.append("Posicao")
+    return genanki.Model(
+        POLIGLOTA_MODEL_ID,
+        "Palavras que valem a pena (Poliglota)",
+        fields=[{"name": f} for f in fields],
+        templates=[{"name": "Cinco línguas", "qfmt": POLIGLOTA_FRONT, "afmt": POLIGLOTA_BACK}],
+        css=POLIGLOTA_CSS,
+        sort_field_index=fields.index("Posicao"),
+    )
+
+
+def poliglota_fields(r: dict) -> list[str]:
+    out = [html.escape(r["palavra_pt"]), html.escape(r["conceito"]), classe(r["classe"])]
+    for code, _, _ in LINGUAS_DECK:
+        word = r.get(f"palavra_{code}")
+        if not word:
+            out += ["—", ""]
+            continue
+        cls = r.get(f"vs_pt_{code}")
+        css = {"igual": "igual", "parecida": "parecida", "mesma origem": "origem"}.get(cls)
+        cell = html.escape(word)
+        if r.get(f"ipa_{code}"):
+            cell += f'<span class="ipa-mini">{html.escape(r[f"ipa_{code}"])}</span>'
+        if css:
+            cell += f'<span class="marca {css}">{MARCAS[cls]}</span>'
+        out += [cell, html.escape(word)]
+    out.append(f"conceito nº {r['rank_en']}")
+    return out
+
+
+def poliglota_guid(conceito: str, classe_: str) -> str:
+    return genanki.guid_for("wwl-poliglota", conceito, classe_)
+
+
+def poliglota_deck_bytes(rows: list[dict]) -> bytes:
+    """Concepts that have a Portuguese word, in English frequency order."""
+    mdl = poliglota_model()
+    deck = genanki.Deck(
+        _int(POLIGLOTA_DECK) % (1 << 31),
+        POLIGLOTA_DECK,
+        description="O mesmo conceito em inglês, espanhol, francês, italiano e alemão, a partir do português.",
+    )
+    for due, r in enumerate(sorted((r for r in rows if r.get("palavra_pt")), key=lambda r: r["rank_en"]), 1):
+        deck.add_note(
+            genanki.Note(
+                model=mdl,
+                fields=poliglota_fields(r),
+                guid=poliglota_guid(r["conceito"], r["classe"]),
+                tags=["wwl::poliglota", f"classe::{classe(r['classe']).replace(' ', '_')}"],
+                sort_field=f"{r['rank_en']:05d}",
+                due=due,
+            )
+        )
+    return package(deck)

@@ -21,7 +21,7 @@ Nenhuma fonte exige chave ou cadastro.
 | Fonte | O que usamos | Licença |
 | --- | --- | --- |
 | [FrequencyWords](https://github.com/hermitdave/FrequencyWords) (OpenSubtitles 2018) | Quantas vezes cada forma de palavra aparece nas legendas de filmes e séries de cada língua | CC BY-SA 4.0 |
-| [Wiktionary](https://en.wiktionary.org) em inglês, extraído pelo [kaikki.org](https://kaikki.org) | Qual palavra de dicionário cada forma representa, classe, gênero, pronúncia (IPA), definições, etimologia | CC BY-SA 4.0 |
+| [Wiktionary](https://en.wiktionary.org) em inglês, extraído pelo [kaikki.org](https://kaikki.org) | Qual palavra de dicionário cada forma representa, classe, gênero, pronúncia (IPA), definições, etimologia; na seção Poliglota, as tabelas de tradução e os ancestrais de cada palavra (também para o português) | CC BY-SA 4.0 |
 | [Universal Dependencies](https://universaldependencies.org) (EWT, AnCora, GSD, ISDT) | Textos anotados à mão, usados para decidir formas ambíguas | CC BY-SA / CC BY / CC BY-NC-SA |
 | [Tatoeba](https://tatoeba.org) | Frases de exemplo e suas traduções | CC BY 2.0 FR |
 
@@ -75,6 +75,16 @@ Inputs.table(
 )
 ```
 
+## Poliglota
+
+**Conceitos.** Cada uma das 5.000 palavras mais frequentes do inglês (com a sua classe principal) é um conceito. As palavras equivalentes em português, espanhol, francês, italiano e alemão vêm da tabela de tradução dessa entrada do Wiktionary, só da mesma classe. As tabelas têm sentidos raros misturados ("dog" lista *vaca*, uma gíria), então uma palavra só é aceita se estiver entre as 10.000 mais frequentes da sua língua (no português, entre as 30.000 formas mais frequentes das legendas). Entre as candidatas, vence a que tem o conceito na primeira definição ("aller": "to go"), depois a que o tem em qualquer definição, a mais frequente primeiro. Uma candidata cuja definição não confirma o sentido só entra se for uma das duas primeiras da tabela. Sem candidata, vale a palavra mais frequente da língua cuja primeira definição é o conceito.
+
+**Semelhança.** Os acentos são ignorados. *Igual*: mesma grafia. *Parecida*: uma letra de diferença (palavras com pelo menos 2 letras), ou, com 4 letras ou mais, distância de edição de no máximo metade do comprimento da palavra mais longa. *Mesma origem*: um ancestral em comum na etimologia do Wiktionary (latim, protogermânico…, mas não o proto-indo-europeu, que aproximaria quase tudo), ou uma palavra citada como ancestral ou cognata da outra.
+
+**Vantagem.** Para a língua B e a língua de partida A: soma das ocorrências nas legendas de B das palavras de B (entre as 5.000 mais frequentes) cuja equivalente em A é igual ou parecida, dividida pelo total de palavras ditas em B. Se uma palavra de B aparece em vários conceitos, vale a melhor semelhança.
+
+**Falsos amigos.** Duas palavras entre as 5.000 mais frequentes das suas línguas, com a mesma grafia sem acentos (pelo menos 3 letras), que não estão ligadas por nenhum conceito e cujas definições não têm nenhum sentido em comum (comparando os pedaços curtos das definições em inglês, inclusive por prefixo: "photo" e "photograph"). Ficam de fora os pares em que uma das definições é a própria palavra (empréstimos como o italiano *okay*) e os pares de flexões de verbos parecidos (*visto* em espanhol e em italiano).
+
 ## Limitações
 
 - Legendas são fala roteirizada, com mais diálogo, palavrões e "hey" que a conversa real; também incluem trechos em outras línguas e erros de reconhecimento de texto.
@@ -82,6 +92,8 @@ Inputs.table(
 - Algumas regras de decisão erram em casos raros (por exemplo, formas pouco frequentes nos textos anotados que são ao mesmo tempo palavra e flexão).
 - O tratamento de maiúsculas é simples: as listas vêm em minúsculas, então "Essen" (comida) e "essen" (comer) do alemão se juntam.
 - A licença do corpus italiano (ISDT) é não comercial; este site não tem fins comerciais.
+- Na seção Poliglota, as palavras gramaticais (pronomes, artigos, verbos auxiliares) se alinham mal: "you" não tem um equivalente único em espanhol, e o "will" do futuro inglês não existe como palavra nas outras línguas. Os conceitos começam a ficar confiáveis a partir dos substantivos, verbos e adjetivos comuns.
+- A vantagem mede reconhecimento na escrita. Pronúncia, gênero e falsos amigos parciais (a mesma palavra com um sentido em comum e outro diferente) ficam de fora.
 
 ## Versão dos dados
 

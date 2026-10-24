@@ -6,12 +6,12 @@ toc: false
 # As palavras, da mais útil para a menos útil
 
 ```js
-import {parquet} from "./components/parquet.js";
-import {destaque, GENEROS, LINGUAS, num, num1, pct, pctd, resultados, rows} from "./components/format.js";
-import {tsvAnki, baixar} from "./components/exportar.js";
+import {parquet} from "../components/parquet.js";
+import {destaque, GENEROS, LINGUAS, num, num1, pct, pctd, resultados, rows} from "../components/format.js";
+import {tsvAnki, baixar} from "../components/exportar.js";
 
-const palavras = rows(await parquet(FileAttachment("data/palavras.parquet")));
-const frases = rows(await parquet(FileAttachment("data/frases.parquet")));
+const palavras = rows(await parquet(FileAttachment("../data/palavras.parquet")));
+const frases = rows(await parquet(FileAttachment("../data/frases.parquet")));
 ```
 
 ```js

@@ -4,9 +4,24 @@ export default {
   root: "src",
   lang: "pt-BR",
   pages: [
-    {name: "Cobertura", path: "/cobertura"},
-    {name: "Palavras", path: "/palavras"},
-    {name: "Baralhos Anki", path: "/anki"},
+    {
+      name: "Vocabulário",
+      pages: [
+        {name: "Visão geral", path: "/vocabulario/"},
+        {name: "Cobertura", path: "/vocabulario/cobertura"},
+        {name: "Palavras", path: "/vocabulario/palavras"},
+        {name: "Baralhos Anki", path: "/vocabulario/anki"}
+      ]
+    },
+    {
+      name: "Poliglota",
+      pages: [
+        {name: "Visão geral", path: "/poliglota/"},
+        {name: "Vantagem de partida", path: "/poliglota/vantagem"},
+        {name: "Conceitos lado a lado", path: "/poliglota/conceitos"},
+        {name: "Falsos amigos", path: "/poliglota/falsos-amigos"}
+      ]
+    },
     {name: "Consulta SQL", path: "/sql"},
     {name: "Sobre os dados", path: "/sobre"}
   ],
