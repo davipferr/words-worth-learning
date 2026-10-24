@@ -1,0 +1,139 @@
+/* Site theme: Framework's default layout + near-midnight, dark-only (it sets
+   color-scheme: dark, so Framework's `dark` flag — and every palette(dark) —
+   is always true), with our own typography, accent and components on top. */
+@import url("observablehq:default.css");
+@import url("observablehq:theme-near-midnight.css");
+@import url("observablehq:theme-alt.css");
+@import url("observablehq:theme-wide.css");
+
+:root {
+  --sans-serif: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --font-big: 600 34px/1.05 var(--sans-serif);
+  /* Accent = slot 1 of the chart palette (components/palette.js), so links,
+     focus rings and the default series share one blue. */
+  --theme-foreground-focus: #3987e5;
+  --accent-soft: color-mix(in srgb, var(--theme-foreground-focus) 12%, var(--theme-background));
+}
+
+/* Prose in the sans; headings in the serif. Figures (KPIs, charts) stay sans. */
+body {
+  font: 16px/1.6 var(--sans-serif);
+}
+h1,
+h2:not(.card h2),
+h3:not(.card h3) {
+  font-family: var(--serif);
+  letter-spacing: -0.01em;
+}
+#observablehq-main > h1:first-child,
+#observablehq-main h1 {
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+#observablehq-main > h2 {
+  margin-top: 2.5rem;
+  font-size: 24px;
+}
+p,
+li {
+  text-wrap: pretty;
+}
+
+/* Numbers that line up in columns use tabular figures; big standalone values
+   keep proportional figures (they read tighter at display sizes). */
+table,
+svg[class^="plot"] text,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cards: a touch more air and a hairline, no heavy chrome. */
+.card {
+  border-radius: 10px;
+  padding: 1.1rem 1.2rem;
+}
+.card h2 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.card .big {
+  display: block;
+  margin: 0.15rem 0 0.1rem;
+  /* Values wear the text colour; the accent belongs to the marks. */
+  color: var(--theme-foreground);
+}
+.muted {
+  color: var(--theme-foreground-muted);
+}
+.small {
+  font-size: 0.85rem;
+}
+
+/* Framework's grid gives every row the tallest card's height; once the columns
+   collapse on phones that leaves big empty gaps, so let rows size to content. */
+@media (max-width: 640px) {
+  .grid {
+    grid-auto-rows: auto;
+  }
+}
+
+/* Sidebar title: Framework pins the close (toggle) button over the right edge
+   of the title link, and our title is long enough to run underneath it. Keep a
+   gutter for the button and let the title wrap onto two lines instead. */
+#observablehq-sidebar > ol:first-child > li > a {
+  height: auto;
+  min-height: calc(var(--observablehq-header-height) - 1rem);
+  padding-right: 2.75rem;
+  line-height: 1.25;
+}
+
+/* Sidebar open/close buttons: Framework draws them in the faint muted grey; a
+   lighter grey makes them easier to spot. */
+#observablehq-sidebar-toggle,
+#observablehq-sidebar-close {
+  color: var(--theme-foreground-alt);
+}
+
+/* Markdown tables (e.g. sources on "Sobre os dados") hold long API URLs in
+   <code>; let them break so the table fits on phones instead of scrolling the page. */
+#observablehq-main td,
+#observablehq-main th {
+  overflow-wrap: anywhere;
+}
+
+/* Framework's chrome text in Portuguese: pager labels and Inputs.table's
+   empty state (both have no option to change them). */
+#observablehq-footer nav a[rel="prev"]::before { content: "Página anterior"; }
+#observablehq-footer nav a[rel="next"]::before { content: "Próxima página"; }
+form table td[rowspan][style*="italic"] { font-size: 0; }
+form table td[rowspan][style*="italic"]::after { content: "Nenhum resultado."; font-size: 12px; }
+
+/* Callout labels in Portuguese (Framework ships them in English). */
+.note:not([label])::before { content: "Nota"; }
+.tip:not([label])::before { content: "Dica"; }
+.warning:not([label])::before { content: "Atenção"; }
+.caution:not([label])::before { content: "Cuidado"; }
+
+/* Small legend row (swatch + label) used next to compact charts. */
+.legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  font: 12px var(--sans-serif);
+  color: var(--theme-foreground-muted);
+}
+.legend-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.legend-row i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+

@@ -1,0 +1,26 @@
+[project]
+name = "words-worth-learning"
+version = "0.1.0"
+description = "Build-time data pipeline (OpenSubtitles frequencies, Wiktionary, Tatoeba) for an Observable Framework site about which words are worth learning first, with Anki decks"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.1",
+    "genanki>=0.13",
+    "httpx>=0.27",
+    "orjson>=3.10",
+    "polars>=1.10",
+    "pyarrow>=26.0.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pipeline"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

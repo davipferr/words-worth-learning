@@ -1,0 +1,22 @@
+{
+  "name": "words-worth-learning",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rimraf src/.observablehq/cache data_cache/frames",
+    "build": "observable build",
+    "postbuild": "uv run --quiet python -m pipeline.manifest publish",
+    "dev": "observable preview",
+    "deploy": "observable deploy",
+    "observable": "observable"
+  },
+  "dependencies": {
+    "@observablehq/framework": "1.13.4"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
