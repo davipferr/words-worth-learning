@@ -25,6 +25,8 @@ Se você já sabe uma língua, quanto da outra você reconhece sem estudar? Para
 
 A vantagem é a soma das ocorrências, nas legendas, das palavras iguais ou parecidas, dividida pelo total de palavras ditas na língua.
 
+Japonês e chinês entram de dois jeitos. Com as línguas de alfabeto latino, só contam as palavras japonesas escritas em katakana (empréstimos), comparadas pela transcrição: *パン* (pan) e *pão*, *ダンス* (dansu) e *dança*. Entre si, as duas comparam caracteres: o japonês *電話* é o chinês *電話* (tradicional) ou *电话* (simplificado). É reconhecimento na escrita, não no som. E a parcela fica baixa porque, no japonês, as palavras gramaticais (partículas, terminações de verbo) são escritas em kana, que o chinês não tem.
+
 ```js
 const medida = view(
   Inputs.radio(

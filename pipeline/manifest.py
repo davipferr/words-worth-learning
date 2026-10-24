@@ -27,7 +27,7 @@ from pathlib import Path
 
 import polars as pl
 
-from . import freq, frames, tatoeba, ud, wiktionary
+from . import cedict, conceitos, freq, frames, tatoeba, ud, wiktionary
 from .http import ROOT, cached_path
 from .langs import PT, selected
 
@@ -45,13 +45,14 @@ def sources() -> list[dict]:
     out = []
     for lang in selected():
         out += [
-            _source(f"OpenSubtitles (FrequencyWords) — {lang.nome}", freq.url(lang.code)),
+            _source(f"{'wordfreq' if lang.freq_fonte == 'wordfreq' else 'OpenSubtitles (FrequencyWords)'} — {lang.nome}", freq.url(lang.freq_code)),
             _source(f"Wiktionary (kaikki.org) — {lang.nome}", wiktionary.url_en(lang.kaikki)),
             _source(f"Tatoeba — frases em {lang.nome.lower()}", tatoeba.sentences_url(lang.tatoeba)),
             *[_source(f"Universal Dependencies — {lang.ud.split('/')[0]}", u) for u in ud.urls(lang.ud)[:1]],
         ]
     out.append(_source("Tatoeba — frases em português", tatoeba.sentences_url(PT.tatoeba)))
     out.append(_source("Wiktionary (kaikki.org) — Português", wiktionary.url_en(PT.kaikki)))
+    out.append(_source("CC-CEDICT", cedict.URL))
     return out
 
 
@@ -75,7 +76,7 @@ def build() -> dict:
     tabelas["poliglota"] = {
         "linhas": conc.height,
         "colunas": conc.columns,
-        "conceitos_completos": conc.filter(pl.col("palavra_pt").is_not_null(), pl.col("n_linguas") == 4).height,
+        "conceitos_completos": conc.filter(pl.col("palavra_pt").is_not_null(), pl.col("n_linguas") == len(conceitos.ALVOS) - 1).height,
         "pares": frames.pares().height,
         "falsos_amigos": frames.falsos_amigos().height,
         **{f"pt_{r['alvo']}_reconhecivel_pct": round(r["reconhecivel"] * 100, 2) for r in vant.filter(pl.col("origem") == "pt").iter_rows(named=True)},

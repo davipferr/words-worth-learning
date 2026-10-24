@@ -27,11 +27,16 @@ export const LINGUAS = [
   {codigo: "es", nome: "Espanhol"},
   {codigo: "fr", nome: "Francês"},
   {codigo: "it", nome: "Italiano"},
-  {codigo: "de", nome: "Alemão"}
+  {codigo: "de", nome: "Alemão"},
+  {codigo: "ja", nome: "Japonês"},
+  {codigo: "zh", nome: "Chinês"}
 ];
 export const nomeLingua = Object.fromEntries(LINGUAS.map((l) => [l.codigo, l.nome]));
 
 export const GENEROS = {m: "masculino", f: "feminino", n: "neutro", "m/f": "masc. ou fem.", "f/m": "masc. ou fem."};
+
+/** True for text in Chinese characters or kana. */
+export const cjk = (s) => /[぀-ヿ㐀-鿿]/.test(s ?? "");
 
 /** Escape a string for use inside a RegExp. */
 export const escRegex = (s) => s.replace(/[.*+?^$()|[\]{}\\]/g, "\\$&");
@@ -40,7 +45,8 @@ export const escRegex = (s) => s.replace(/[.*+?^$()|[\]{}\\]/g, "\\$&");
 export function destaque(texto, forma) {
   const span = document.createElement("span");
   if (!texto) return span;
-  const re = forma ? new RegExp(`(?<![\\p{L}])${escRegex(forma)}(?![\\p{L}])`, "iu") : null;
+  // Chinese and Japanese have no spaces, hence no word boundaries to check.
+  const re = forma ? new RegExp(cjk(forma) ? escRegex(forma) : `(?<![\\p{L}])${escRegex(forma)}(?![\\p{L}])`, "iu") : null;
   const m = re ? re.exec(texto) : null;
   if (!m) {
     span.textContent = texto;

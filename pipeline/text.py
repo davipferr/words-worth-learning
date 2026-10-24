@@ -27,13 +27,56 @@ def tokenize(text: str, apostrofo: str = "none") -> list[str]:
     return _TOKEN[apostrofo].findall(text.translate(_APOSTROPHES).lower())
 
 
+# Han characters, kana and the prolonged-sound mark: scripts written without spaces.
+_CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿豈-﫿々ー]+")
+MAX_WORD = 8  # longest dictionary word tried by the segmenter, in characters
+
+
+def is_cjk(text: str) -> bool:
+    return bool(_CJK.search(text))
+
+
+def segment(run: str, vocab: set[str]) -> list[str]:
+    """Split a run of Chinese or Japanese characters into known words, longest
+    match first (forward maximum matching); unknown characters stand alone.
+
+    >>> segment("我们知道", {"我们", "知道", "我"})
+    ['我们', '知道']
+    """
+    out, i = [], 0
+    while i < len(run):
+        for n in range(min(MAX_WORD, len(run) - i), 0, -1):
+            if n == 1 or run[i : i + n] in vocab:
+                out.append(run[i : i + n])
+                i += n
+                break
+    return out
+
+
+def tokenize_cjk(text: str, vocab: set[str]) -> list[str]:
+    """Tokens of a Chinese or Japanese sentence: CJK runs segmented against
+    ``vocab`` (the language's frequency-list forms), Latin words as usual."""
+    out: list[str] = []
+    pos = 0
+    for m in _CJK.finditer(text):
+        out += tokenize(text[pos : m.start()])
+        out += segment(m.group(0), vocab)
+        pos = m.end()
+    return out + tokenize(text[pos:])
+
+
 def is_word(token: str) -> bool:
     """True for tokens made of letters (and apostrophes), as kept from the frequency lists."""
     return bool(token) and all(ch.isalpha() or ch == "'" for ch in token) and any(ch.isalpha() for ch in token)
 
 
 def fold(word: str) -> str:
-    """Lower case without diacritics: "Información" -> "informacion", "Straße" -> "strasse"."""
+    """Lower case without diacritics: "Información" -> "informacion", "Straße" -> "strasse".
+
+    Chinese and Japanese are only lower-cased: decomposing kana would strip the
+    voicing marks that tell が from か."""
+    if is_cjk(word):
+        return unicodedata.normalize("NFC", word.lower())
     s = unicodedata.normalize("NFKD", word.lower().replace("ß", "ss"))
     return "".join(ch for ch in s if not unicodedata.combining(ch))
 

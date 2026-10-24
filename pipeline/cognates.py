@@ -49,7 +49,7 @@ def looks_alike(a: str, b: str) -> bool:
     return max(len(fa), len(fb)) >= MIN_LEN_SIMILAR and similarity(fa, fb) >= SIMILAR
 
 
-def same_origin(a: tuple[str, str, set[str], set[str]], b: tuple[str, str, set[str], set[str]]) -> bool:
+def same_origin(a: tuple, b: tuple) -> bool:
     """Each argument is (language, word, ancestor keys, cognate keys)."""
     lang_a, word_a, anc_a, cog_a = a
     lang_b, word_b, anc_b, cog_b = b
@@ -62,17 +62,55 @@ def same_origin(a: tuple[str, str, set[str], set[str]], b: tuple[str, str, set[s
     return key_b in anc_a or key_a in anc_b or key_b in cog_a or key_a in cog_b
 
 
-def classify(a: tuple[str, str, set[str], set[str]], b: tuple[str, str, set[str], set[str]]) -> tuple[str, float]:
-    """(class, spelling similarity) of two words for the same concept."""
-    wa, wb = a[1], b[1]
-    sim = similarity(wa, wb)
-    if fold(wa) == fold(wb):
+CJK = {"ja", "zh"}
+_KATAKANA = re.compile(r"^[゠-ヿ]+$")
+
+
+def spellings(word: tuple, other_lang: str) -> list[str]:
+    """What of ``word`` can be compared with a word of ``other_lang``.
+
+    Latin-script words compare their spelling. Chinese and Japanese compare
+    characters with each other (Japanese 電話 is Chinese 電話, traditional,
+    and 电话, simplified). Against Latin-script languages only Japanese
+    katakana words count, by their romaji (パン, "pan", from Portuguese "pão"):
+    the romanization of native words matches Latin words by accident only.
+    """
+    lang, palavra = word[0], word[1]
+    roman = word[4] if len(word) > 4 else None
+    tradicional = word[5] if len(word) > 5 else None
+    if lang not in CJK:
+        return [palavra]
+    if other_lang in CJK:
+        return [w for w in (palavra, tradicional) if w]
+    return [roman] if lang == "ja" and roman and _KATAKANA.match(palavra) else []
+
+
+def classify(a: tuple, b: tuple) -> tuple[str, float]:
+    """(class, spelling similarity) of two words for the same concept.
+
+    Each word is (language, word, ancestor keys, cognate keys[, romanization,
+    traditional spelling])."""
+    sa, sb = spellings(a, b[0]), spellings(b, a[0])
+    pairs = [(x, y) for x in sa for y in sb]
+    sim = max((similarity(x, y) for x, y in pairs), default=0.0)
+    if any(fold(x) == fold(y) for x, y in pairs):
         return "igual", 1.0
-    if looks_alike(wa, wb):
+    # Characters are either the same or not: no "parecida" between them.
+    latin = a[0] not in CJK or b[0] not in CJK
+    if latin and any(looks_alike(x, y) for x, y in pairs):
         return "parecida", sim
-    if same_origin(a, b):
+    if same_origin(a[:4], b[:4]):
         return "mesma origem", sim
     return "diferente", sim
+
+
+_GLOSS_WORD = re.compile(r"[a-z]{3,}")
+_STOP = {"the", "and", "for", "with", "from", "that", "this", "one", "used", "something", "someone", "sth", "who", "which", "etc", "especially", "esp", "not", "are", "its"}
+
+
+def gloss_words(glosas: list[str]) -> set[str]:
+    """Content words of English glosses, for a looser meaning comparison."""
+    return {w for g in glosas for w in _GLOSS_WORD.findall(g.lower())} - _STOP
 
 
 def heads_overlap(a: set[str], b: set[str]) -> bool:

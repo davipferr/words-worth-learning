@@ -3,6 +3,12 @@
 The site is in Portuguese and example sentences come with their Portuguese
 translation when Tatoeba has one. ``WWL_LANGS`` picks which target languages
 a build includes (default: all of them).
+
+Japanese and Chinese are written without spaces. Chinese subtitles come
+already segmented into words; Japanese ones in FrequencyWords are not usable
+(the tokenizer dropped every hiragana character), so Japanese frequencies
+come from wordfreq, which segments with MeCab and mixes subtitles with
+Wikipedia, news and social media.
 """
 
 from __future__ import annotations
@@ -28,6 +34,14 @@ class Lang:
     # "don" would be counted as the verb "to don".
     contracoes: dict[str, str] = field(default_factory=dict)
     freq: str = ""  # FrequencyWords folder, when it differs from ``code``
+    freq_fonte: str = "opensubtitles"  # or "wordfreq"
+    # Written without spaces: sentences are segmented against the known words.
+    cjk: bool = False
+    # Code of the language in English Wiktionary's translation tables.
+    trad_code: str = ""
+    # Whether the treebank's lemmas regroup forms. Not for Chinese, which has no
+    # inflection: its treebank lemmatises 我们 ("we") to 我 ("I").
+    ud_lemas: bool = True
 
     @property
     def freq_code(self) -> str:
@@ -61,6 +75,8 @@ LANGS: dict[str, Lang] = {
         },
     ),  # fmt: skip
     "de": Lang("de", "Alemão", "German", "deu", "de_DE", ud="UD_German-GSD/de_gsd"),
+    "ja": Lang("ja", "Japonês", "Japanese", "jpn", "ja_JP", ud="UD_Japanese-GSD/ja_gsd", freq_fonte="wordfreq", cjk=True),
+    "zh": Lang("zh", "Chinês", "Chinese", "cmn", "zh_CN", ud="UD_Chinese-GSDSimp/zh_gsdsimp", freq="zh_cn", cjk=True, trad_code="cmn", ud_lemas=False),
 }
 
 # Wiktionary's part-of-speech codes, in Portuguese.
@@ -68,7 +84,8 @@ CLASSES = {
     "noun": "substantivo", "verb": "verbo", "adj": "adjetivo", "adv": "advérbio", "pron": "pronome",
     "det": "determinante", "article": "artigo", "prep": "preposição", "conj": "conjunção", "intj": "interjeição",
     "num": "numeral", "particle": "partícula", "contraction": "contração", "phrase": "expressão",
-    "prep_phrase": "locução", "adv_phrase": "locução", "postp": "posposição",
+    "prep_phrase": "locução", "adv_phrase": "locução", "postp": "posposição", "suffix": "sufixo",
+    "character": "caractere", "counter": "contador", "classifier": "classificador", "affix": "afixo",
 }  # fmt: skip
 GENEROS = {"m": "masculino", "f": "feminino", "n": "neutro", "m/f": "masculino ou feminino", "f/m": "masculino ou feminino"}
 

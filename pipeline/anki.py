@@ -27,6 +27,7 @@ import genanki
 import polars as pl
 
 from .langs import GENEROS, Lang, classe
+from .text import is_cjk
 
 BANDS = [(1, 500), (501, 1000), (1001, 2000), (2001, 3000), (3001, 5000)]
 ROOT_DECK = "Palavras que valem a pena"
@@ -98,6 +99,9 @@ def highlight(sentence: str, form: str | None) -> str:
     text = html.escape(sentence)
     if not form:
         return text
+    if is_cjk(form):
+        # No spaces, so no word boundaries: the first occurrence.
+        return text.replace(html.escape(form), f"<b>{html.escape(form)}</b>", 1)
     pattern = re.compile(rf"(?<![^\W\d_]){re.escape(html.escape(form))}(?![^\W\d_])", re.IGNORECASE)
     return pattern.sub(lambda m: f"<b>{m.group(0)}</b>", text, count=1)
 
@@ -180,7 +184,10 @@ def archive(decks: dict[str, bytes]) -> bytes:
 POLIGLOTA_MODEL_ID = 1726448999
 POLIGLOTA_DECK = f"{ROOT_DECK}::Poliglota"
 POLIGLOTA_FILE = "poliglota.apkg"
-LINGUAS_DECK = [("en", "Inglês", "en_US"), ("es", "Espanhol", "es_ES"), ("fr", "Francês", "fr_FR"), ("it", "Italiano", "it_IT"), ("de", "Alemão", "de_DE")]
+LINGUAS_DECK = [
+    ("en", "Inglês", "en_US"), ("es", "Espanhol", "es_ES"), ("fr", "Francês", "fr_FR"), ("it", "Italiano", "it_IT"),
+    ("de", "Alemão", "de_DE"), ("ja", "Japonês", "ja_JP"), ("zh", "Chinês", "zh_CN"),
+]  # fmt: skip
 MARCAS = {"igual": "igual ao português", "parecida": "parecida", "mesma origem": "mesma origem", "diferente": ""}
 
 def _campo(lang_nome: str) -> str:
@@ -261,7 +268,7 @@ def poliglota_deck_bytes(rows: list[dict]) -> bytes:
     deck = genanki.Deck(
         _int(POLIGLOTA_DECK) % (1 << 31),
         POLIGLOTA_DECK,
-        description="O mesmo conceito em inglês, espanhol, francês, italiano e alemão, a partir do português.",
+        description="O mesmo conceito em inglês, espanhol, francês, italiano, alemão, japonês e chinês, a partir do português.",
     )
     for due, r in enumerate(sorted((r for r in rows if r.get("palavra_pt")), key=lambda r: r["rank_en"]), 1):
         deck.add_note(

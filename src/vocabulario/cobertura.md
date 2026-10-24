@@ -37,11 +37,12 @@ Inputs.table(
   linguas.map((l) => {
     const r = porCodigo[l.codigo];
     // Inputs.table skips the formatter for null, so "out of range" is spelled out here.
-    return {lingua: l.nome, p50: r.para["50"], p80: r.para["80"], p90: r.para["90"], p95: r.para["95"] ?? "mais de 10.000", c1000: r.cobertura_em["1000"], c5000: r.cobertura_em["5000"]};
+    const fora = "mais de 10.000";
+    return {lingua: l.nome, p50: r.para["50"] ?? fora, p80: r.para["80"] ?? fora, p90: r.para["90"] ?? fora, p95: r.para["95"] ?? fora, c1000: r.cobertura_em["1000"], c5000: r.cobertura_em["5000"]};
   }),
   {
     header: {lingua: "Língua", p50: "50%", p80: "80%", p90: "90%", p95: "95%", c1000: "Com 1.000", c5000: "Com 5.000"},
-    format: {p50: num, p80: num, p90: num, p95: (d) => (typeof d === "string" ? d : num(d)), c1000: pct, c5000: pct},
+    format: Object.fromEntries([...["p50", "p80", "p90", "p95"].map((k) => [k, (d) => (typeof d === "string" ? d : num(d))]), ["c1000", pct], ["c5000", pct]]),
     sort: null,
     select: false,
     layout: "auto"
@@ -51,7 +52,7 @@ Inputs.table(
 
 <p class="muted small">Colunas 50% a 95%: quantas palavras, das mais frequentes para as menos, são necessárias para reconhecer essa parcela do que se fala. As duas últimas colunas fazem a conta inversa.</p>
 
-Pesquisas sobre leitura costumam citar 95% a 98% de palavras conhecidas como o limiar para entender um texto sem esforço. Nas legendas, a fala do dia a dia, a cobertura sobe rápido: o italiano é a língua que mais exige, por ter mais formas por verbo e mais palavras distintas.
+Pesquisas sobre leitura costumam citar 95% a 98% de palavras conhecidas como o limiar para entender um texto sem esforço. Nas legendas, a fala do dia a dia, a cobertura sobe rápido. Entre as línguas europeias, italiano e alemão são as que mais exigem. O chinês fica bem abaixo das outras: as legendas vêm segmentadas em muitas palavras compostas (这是, "isto é"; 一下, "um pouco"), cada uma contada como palavra própria. As frequências do japonês vêm de fontes mistas (legendas, Wikipédia, notícias), então a comparação com ele é aproximada.
 
 ## Cada faixa rende menos que a anterior
 
@@ -92,7 +93,14 @@ resize((width) =>
 const q = porCodigo[qual.codigo];
 ```
 
-Em ${qual.nome.toLowerCase()}, ${num(q.para["80"])} palavras cobrem 80% do que se fala; aprendendo formas soltas seriam necessárias ${num(q.formas_para["80"])}.
+```js
+const formas80 = q.formas_para["80"];
+const palavras80 = q.para["80"];
+```
+
+${formas80 != null && formas80 <= palavras80
+  ? html`Em ${qual.nome.toLowerCase()}, ${num(palavras80)} palavras cobrem 80% do que se fala, e as formas soltas chegariam lá com ${num(formas80)}. Não é vantagem das formas: o ${qual.nome.toLowerCase()} quase não tem flexão, e a curva das formas conta também compostos que o dicionário não registra (这是, "isto é") e nomes próprios, que a lista de palavras deixa de fora.`
+  : html`Em ${qual.nome.toLowerCase()}, ${num(palavras80)} palavras cobrem 80% do que se fala; aprendendo formas soltas seriam necessárias ${formas80 == null ? "mais de 10.000" : num(formas80)}.`}
 
 ## O que fica de fora
 

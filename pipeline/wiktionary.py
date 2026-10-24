@@ -35,9 +35,11 @@ from .text import fold
 # wants "casa = house", not the 17th-century meaning.
 MARGINAL = {"obsolete", "archaic", "dated", "rare", "historical", "nonstandard", "misspelling"}
 GENEROS = {"masculine": "m", "feminine": "f", "neuter": "n"}
+CLIPPING = {"clipping", "abbreviation", "short-form", "ellipsis"}
 MAX_GLOSAS = 6
-# Languages whose translations are kept from English entries' tables.
-TRAD_LANGS = ("es", "fr", "it", "de", "pt")
+# Languages whose translations are kept from English entries' tables, as
+# {table code: our code}: tables list Mandarin as "cmn".
+TRAD_LANGS = {"es": "es", "fr": "fr", "it": "it", "de": "de", "pt": "pt", "ja": "ja", "cmn": "zh"}
 TRAD_PER_LANG = 4
 # Etymology templates that name an ancestor: inherited, derived, borrowed…
 ANCESTOR_TEMPLATES = {"inh", "inh+", "der", "der+", "bor", "bor+", "lbor", "ubor", "slbor", "obor", "uder", "cal", "lbor+"}
@@ -59,6 +61,14 @@ SCHEMA = {
     "cognatos": pl.List(pl.String),
     # "es:perro": translations from the entry's tables (English entries only).
     "traducoes": pl.List(pl.String),
+    # Japanese and Chinese: romanization without tone marks ("denwa", "dianhua"),
+    # for comparing with Latin-script languages.
+    "roman": pl.String,
+    # Chinese: the traditional spelling (entries are keyed by it; ``palavra``
+    # is the simplified one, as in mainland subtitles).
+    "tradicional": pl.String,
+    # Japanese: conjugated forms as MeCab segments them ("書き", "書い" for 書いた).
+    "flexoes": pl.List(pl.String),
 }
 
 
@@ -121,23 +131,70 @@ def _translations(entry: dict) -> list[str]:
     """
     senses: dict[tuple[str, str], set] = {}
     for t in [*(entry.get("translations") or []), *(t for s in entry.get("senses") or [] for t in s.get("translations") or [])]:
-        lang = t.get("lang_code")
+        lang = TRAD_LANGS.get(t.get("lang_code"))
         word = _PAREN.sub("", t.get("word") or "").strip()  # "(o) teu" -> "teu"
-        if lang in TRAD_LANGS and word and " " not in word:
+        if lang == "zh":
+            if "Traditional-Chinese" in (t.get("tags") or []):
+                continue
+            word = word.split("/")[-1].strip()  # "電話 /电话": traditional / simplified
+        if lang and word and " " not in word:
             senses.setdefault((lang, word), set()).add(t.get("sense"))
     out: list[str] = []
-    for lang in TRAD_LANGS:
+    for lang in TRAD_LANGS.values():
         ranked = sorted((w for (lg, w) in senses if lg == lang), key=lambda w: -len(senses[(lang, w)]))  # stable: ties keep table order
         out += [f"{lang}:{w}" for w in ranked[:TRAD_PER_LANG]]
     return out
 
 
-def compact(entry: dict) -> dict:
+_LATIN = re.compile(r"[A-Za-z]")
+# Japanese inflected forms end in these before MeCab splits off the
+# auxiliary: 書いた -> 書い + た, 書いて -> 書い + て, 書かない -> 書か + ない.
+_JA_SUFFIXES = ("たら", "たり", "ない", "た", "だ", "て", "で")
+
+
+def _roman(text: str | None) -> str | None:
+    return fold(text).replace(" ", "").replace("-", "") if text else None
+
+
+def _chinese(entry: dict) -> dict:
+    """Simplified spelling and Mandarin pinyin of a Chinese entry."""
+    simplified = next((f["form"] for f in entry.get("forms") or [] if "Simplified-Chinese" in (f.get("tags") or [])), None)
+    pinyin = [s for s in entry.get("sounds") or [] if s.get("zh_pron") and {"Mandarin", "Pinyin"} <= set(s.get("tags") or [])]
+    standard = [s for s in pinyin if "Standard" in (s.get("tags") or [])] or pinyin
+    py = standard[0]["zh_pron"] if standard else None
+    return {"palavra": simplified or entry.get("word"), "tradicional": entry.get("word"), "ipa": py, "roman": _roman(py)}
+
+
+def _japanese(entry: dict) -> dict:
+    """Kana reading, romaji and conjugated forms of a Japanese entry."""
+    word = entry.get("word") or ""
+    forms = entry.get("forms") or []
+    romaji = next((f["form"] for f in forms if "romanization" in (f.get("tags") or [])), None)
+    kana = next((s["other"] for s in entry.get("sounds") or [] if s.get("other")), None)
+    reading = " · ".join(x for x in [kana if kana and kana != word else None, romaji] if x) or None
+    flexoes: list[str] = []
+    for f in forms:
+        form = f.get("form") or ""
+        if f.get("source") != "conjugation" and not {"stem", "past"} & set(f.get("tags") or []):
+            continue
+        if not form or _LATIN.search(form) or form == word:
+            continue
+        flexoes.append(form)
+        for suffix in _JA_SUFFIXES:
+            if form.endswith(suffix) and len(form) > len(suffix):
+                flexoes.append(form[: -len(suffix)])
+                break
+    return {"ipa": reading, "roman": _roman(romaji), "flexoes": list(dict.fromkeys(flexoes))[:40]}
+
+
+def compact(entry: dict, lang: str | None = None) -> dict:
     """One English-Wiktionary entry -> the fields the pipeline uses."""
     lemma_senses, forma_de, generos = [], [], []
     for s in entry.get("senses") or []:
         targets = [f.get("word") for f in (s.get("form_of") or []) + (s.get("alt_of") or []) if f.get("word")]
-        if targets:
+        # A clipping or abbreviation is a word of its own (テレビ, "TV", is
+        # far more common than テレビジョン): keep it, with its gloss.
+        if targets and not CLIPPING & set(s.get("tags") or []):
             forma_de += [t for t in targets if t not in forma_de]
             continue
         lemma_senses.append(s)
@@ -154,6 +211,7 @@ def compact(entry: dict) -> dict:
     etimo = (entry.get("etymology_text") or "").split(". ")[0].strip().rstrip(".")[:200] or None
 
     etimos, cognatos = _etymology(entry)
+    extra = _chinese(entry) if lang == "zh" else _japanese(entry) if lang == "ja" else {}
     return {
         "palavra": entry.get("word"),
         "pos": entry.get("pos"),
@@ -165,21 +223,30 @@ def compact(entry: dict) -> dict:
         "etimos": etimos,
         "cognatos": cognatos,
         "traducoes": _translations(entry),
-    }
+        "roman": None,
+        "tradicional": None,
+        "flexoes": [],
+    } | extra
 
 
-def parse_en(lines: Iterable[bytes], keep: set[str] | None = None) -> pl.DataFrame:
+def parse_en(lines: Iterable[bytes], keep: set[str] | None = None, lang: str | None = None) -> pl.DataFrame:
     """Compact table of entries; ``keep`` (lower-cased words) filters before the
-    expensive part, so only words that occur in subtitles are kept."""
+    expensive part, so only words that occur in subtitles are kept. Chinese
+    entries are keyed by their traditional spelling and Japanese verbs occur
+    as conjugated forms, so for those the filter runs after ``compact``."""
     rows = []
+    late = lang in ("zh", "ja")
     for line in lines:
         entry = orjson.loads(line)
         word = entry.get("word")
-        if not word or (keep is not None and word.lower() not in keep):
+        if not word or (keep is not None and not late and word.lower() not in keep):
             continue
-        rows.append(compact(entry))
+        row = compact(entry, lang)
+        if keep is not None and late and row["palavra"].lower() not in keep and not any(f in keep for f in row["flexoes"]):
+            continue
+        rows.append(row)
     return pl.DataFrame(rows, schema=SCHEMA)
 
 
-def entries_en(language: str, keep: set[str] | None = None) -> pl.DataFrame:
-    return parse_en(_lines(download(url_en(language), max_age=MAX_AGE)), keep)
+def entries_en(language: str, keep: set[str] | None = None, lang: str | None = None) -> pl.DataFrame:
+    return parse_en(_lines(download(url_en(language), max_age=MAX_AGE)), keep, lang)

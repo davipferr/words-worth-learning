@@ -11,7 +11,7 @@ toc: false
 import {parquet} from "../components/parquet.js";
 import {num, pct, rows} from "../components/format.js";
 import {palette} from "../components/palette.js";
-import {matriz, NOMES} from "../components/poliglota.js";
+import {ALVOS, matriz, NOMES} from "../components/poliglota.js";
 
 const vantagem = rows(await parquet(FileAttachment("../data/poliglota/vantagem.parquet")));
 const conceitos = rows(await parquet(FileAttachment("../data/poliglota/conceitos.parquet")));
@@ -23,11 +23,11 @@ const pal = palette(dark);
 const doPt = vantagem.filter((d) => d.origem === "pt").sort((a, b) => b.reconhecivel - a.reconhecivel);
 const melhor = vantagem.filter((d) => d.origem !== "pt").sort((a, b) => b.reconhecivel - a.reconhecivel)[0];
 const deEn = vantagem.find((d) => d.origem === "en" && d.alvo === "de");
-const completos = conceitos.filter((d) => d.palavra_pt && d.n_linguas === 4).length;
+const completos = conceitos.filter((d) => d.palavra_pt && d.n_linguas === ALVOS.length - 1).length;
 ```
 
 <div class="card hero">
-  <h2 class="hero-title">Para quem fala português, ${pct(doPt[0].reconhecivel)} do que se fala em ${NOMES[doPt[0].alvo].toLowerCase()} são palavras iguais ou parecidas com as nossas; no italiano, ${pct(doPt.find((d) => d.alvo === "it").reconhecivel)}; no francês, ${pct(doPt.find((d) => d.alvo === "fr").reconhecivel)}. No inglês e no alemão, só ${pct(doPt.find((d) => d.alvo === "en").reconhecivel)} e ${pct(doPt.find((d) => d.alvo === "de").reconhecivel)}.</h2>
+  <h2 class="hero-title">Para quem fala português, ${pct(doPt[0].reconhecivel)} do que se fala em ${NOMES[doPt[0].alvo].toLowerCase()} são palavras iguais ou parecidas com as nossas; no italiano, ${pct(doPt.find((d) => d.alvo === "it").reconhecivel)}; no francês, ${pct(doPt.find((d) => d.alvo === "fr").reconhecivel)}. No inglês e no alemão, só ${pct(doPt.find((d) => d.alvo === "en").reconhecivel)} e ${pct(doPt.find((d) => d.alvo === "de").reconhecivel)}; no japonês e no chinês, quase nada.</h2>
   ${resize((width) => matriz(vantagem, {width, pal, destaque: (d) => d.origem === "pt"}))}
   <p class="muted small">Cada célula: parcela de todas as palavras ditas nas legendas da língua da coluna que são iguais ou parecidas com a palavra equivalente na língua da linha, contando só as 5.000 mais frequentes. É um piso: palavras sem equivalente alinhado contam como não reconhecidas. Passe o mouse para ver o detalhe. <a href="./vantagem">Mais sobre a vantagem →</a></p>
 </div>
@@ -41,7 +41,7 @@ const completos = conceitos.filter((d) => d.palavra_pt && d.n_linguas === 4).len
   <a class="card card-link" href="./conceitos">
     <h2>Conceitos lado a lado</h2>
     <span class="big">${num(completos)}</span>
-    <p class="muted">conceitos com palavra nas seis línguas, coloridos pela semelhança com o português. Também em baralho do Anki com as cinco línguas no verso.</p>
+    <p class="muted">conceitos com palavra nas oito línguas, coloridos pela semelhança com o português. Também em baralho do Anki com as sete línguas no verso.</p>
   </a>
   <a class="card card-link" href="./falsos-amigos">
     <h2>Falsos amigos</h2>

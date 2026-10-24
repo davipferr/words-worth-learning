@@ -18,7 +18,8 @@ from pathlib import Path
 
 import polars as pl
 
-from . import cognates, conceitos, examples, freq, lexicon, tatoeba, ud, wiktionary
+from . import cedict, cognates, conceitos, examples, freq, lexicon, tatoeba, ud, wiktionary
+from .text import fold, is_cjk
 from .http import CACHE_DIR, log
 from .langs import LANGS, PT, Lang
 from .schema import require_columns
@@ -80,9 +81,35 @@ def dicionario(lang: Lang) -> pl.DataFrame:
     def build() -> pl.DataFrame:
         keep = set(formas(lang.freq_code)["forma"].to_list()) | set(lang.contracoes.values())
         log(f"parsing Wiktionary ({lang.kaikki}) for {len(keep):,} subtitle forms")
-        return require_columns(wiktionary.entries_en(lang.kaikki, keep), ["palavra", "pos", "glosas", "forma_de"], f"kaikki {lang.kaikki}", min_rows=5_000)
+        dic = require_columns(wiktionary.entries_en(lang.kaikki, keep, lang.code), ["palavra", "pos", "glosas", "forma_de"], f"kaikki {lang.kaikki}", min_rows=5_000)
+        if lang.code == "zh":
+            # Words CC-CEDICT has and Wiktionary doesn't (common compounds,
+            # colloquialisms) become lemmas too; part of speech "cedict".
+            cd = cedict_tabela().filter(pl.col("palavra").is_in(list(keep)), ~pl.col("palavra").is_in(dic["palavra"].implode()))
+            extra = cd.group_by("palavra", maintain_order=True).agg(pl.col("glosas").first(), pl.col("pinyin").first(), pl.col("tradicional").first())
+            dic = pl.concat([dic, extra.select(
+                "palavra", pl.lit("cedict").alias("pos"), "glosas", pl.lit([], pl.List(pl.String)).alias("forma_de"),
+                pl.lit(None, pl.String).alias("genero"), pl.col("pinyin").alias("ipa"), pl.lit(None, pl.String).alias("etimo"),
+                *[pl.lit([], pl.List(pl.String)).alias(c) for c in ("etimos", "cognatos", "traducoes")],
+                pl.col("pinyin").map_elements(lambda p: fold(p).replace(" ", ""), return_dtype=pl.String).alias("roman"),
+                "tradicional", pl.lit([], pl.List(pl.String)).alias("flexoes"),
+            )])  # fmt: skip
+        return dic
 
-    return memo(f"dic-{lang.code}", build, deps=("wiktionary", "freq", "text", "langs"), max_age=RAW_AGE)
+    return memo(f"dic-{lang.code}", build, deps=("wiktionary", "freq", "text", "langs", "cedict"), max_age=RAW_AGE)
+
+
+def cedict_tabela() -> pl.DataFrame:
+    """CC-CEDICT: one row per (word, reading)."""
+    return memo("cedict", cedict.entries, deps=("cedict",), max_age=RAW_AGE)
+
+
+# Treebank part of speech -> the class shown for Chinese words, whose
+# Wiktionary entries are per character ("character") or absent ("cedict").
+UPOS_CLASSE = {
+    "NOUN": "noun", "VERB": "verb", "AUX": "verb", "ADJ": "adj", "ADV": "adv", "PRON": "pron", "DET": "det",
+    "ADP": "prep", "CCONJ": "conj", "SCONJ": "conj", "NUM": "num", "PART": "particle", "INTJ": "intj",
+}  # fmt: skip
 
 
 def frases_pt() -> pl.DataFrame:
@@ -113,7 +140,10 @@ def treebank(lang: Lang) -> pl.DataFrame:
 
 def formas_lemas(lang: Lang) -> pl.DataFrame:
     """Each form of the language with the lemma(s) it counts for."""
-    return memo(f"formas-lemas-{lang.code}", lambda: lexicon.lemmatize(formas(lang.code), lexicon.index(dicionario(lang)), lang, treebank(lang)))
+    return memo(
+        f"formas-lemas-{lang.code}",
+        lambda: lexicon.lemmatize(formas(lang.freq_code), lexicon.index(dicionario(lang)), lang, treebank(lang) if lang.ud_lemas else None),
+    )
 
 
 def upos_by_lemma(lang: Lang) -> dict[str, str]:
@@ -144,7 +174,8 @@ def lemas(lang: Lang) -> pl.DataFrame:
                 pl.col("status").first().alias("status_forma"),
             )
         )
-        learnable = [any(e.is_lemma for e in idx.get(w.lower(), [])) for w in agg["lema"].to_list()]
+        # Chinese and Japanese lists keep only words in their own scripts.
+        learnable = [any(e.is_lemma for e in idx.get(w.lower(), [])) and (not lang.cjk or is_cjk(w)) for w in agg["lema"].to_list()]
         agg = agg.with_columns(pl.Series("aprendivel", learnable, pl.Boolean)).with_columns(
             pl.when(pl.col("aprendivel"))
             .then(pl.lit("palavra"))
@@ -161,6 +192,11 @@ def lemas(lang: Lang) -> pl.DataFrame:
         )
 
         upos = upos_by_lemma(lang)
+        if lang.code == "zh":
+            readings: dict[str, list[dict]] = {}
+            for r in cedict_tabela().iter_rows(named=True):
+                readings.setdefault(r["palavra"], []).append(r)
+            translit = ud.lemma_translit(lang.ud)
         info = []
         for lema, rank in words.select("lema", "rank").iter_rows():
             if rank > TOP_LEMMAS:
@@ -168,21 +204,32 @@ def lemas(lang: Lang) -> pl.DataFrame:
             every = idx[lema.lower()]
             main = lexicon.main_entries(every, lema, upos.get(lema.lower()))
             glosas: list[str] = []
-            for e in main:
+            # Letter and syllable entries only when there is nothing else (て is
+            # a particle, not "the hiragana syllable て").
+            for e in [e for e in main if not e.is_letter] or main:
                 for g in e.glosas:
                     if len(glosas) < 4 and g not in glosas:
                         glosas.append(g)
-            info.append(
-                {
-                    "lema": lema,
-                    "classe": main[0].pos,
-                    "classes": list(dict.fromkeys(e.pos for e in main)),
-                    "genero": main[0].genero if main[0].pos == "noun" else None,
-                    "ipa": next((e.ipa for e in main if e.ipa), None) or next((e.ipa for e in every if e.ipa), None),
-                    "etimo": next((e.etimo for e in main if e.etimo), None),
-                    "glosas": glosas,
-                }
-            )
+            row = {
+                "lema": lema,
+                "classe": main[0].pos,
+                "classes": list(dict.fromkeys(e.pos for e in main)),
+                "genero": main[0].genero if main[0].pos == "noun" else None,
+                "ipa": next((e.ipa for e in main if e.ipa), None) or next((e.ipa for e in every if e.ipa), None),
+                "etimo": next((e.etimo for e in main if e.etimo), None),
+                "glosas": glosas,
+            }
+            if lang.code == "zh":
+                # Definitions and pinyin from CC-CEDICT, for the reading the
+                # treebank uses; the class from the treebank when Wiktionary
+                # only has a per-character entry.
+                pick = cedict.choose(readings.get(lema, []), translit.get(lema))
+                if pick:
+                    row["glosas"] = (cedict.real_glosses(pick["glosas"]) or pick["glosas"])[:4]
+                    row["ipa"] = pick["pinyin"]
+                if row["classe"] in ("character", "cedict") and upos.get(lema.lower()) in UPOS_CLASSE:
+                    row["classe"] = UPOS_CLASSE[upos[lema.lower()]]
+            info.append(row)
         schema = {"lema": pl.String, "classe": pl.String, "classes": pl.List(pl.String), "genero": pl.String, "ipa": pl.String, "etimo": pl.String, "glosas": pl.List(pl.String)}
         words = words.join(pl.DataFrame(info, schema=schema), on="lema", how="left")
         others = agg.filter(~pl.col("aprendivel"))
@@ -212,7 +259,7 @@ def cobertura(lang: Lang) -> pl.DataFrame:
     def build() -> pl.DataFrame:
         total = total_tokens(lang)
         w = lemas(lang).filter(pl.col("rank") <= TOP_LEMMAS).select("rank", "cobertura")
-        f = formas(lang.code).head(TOP_LEMMAS).select(
+        f = formas(lang.freq_code).head(TOP_LEMMAS).select(
             pl.int_range(1, pl.len() + 1).alias("rank"), (pl.col("contagem").cum_sum() / total).alias("cobertura_formas")
         )
         return w.join(f, on="rank", how="left").sort("rank")
@@ -221,7 +268,7 @@ def cobertura(lang: Lang) -> pl.DataFrame:
 
 
 def total_tokens(lang: Lang) -> int:
-    return int(formas(lang.code)["contagem"].sum())
+    return int(formas(lang.freq_code)["contagem"].sum())
 
 
 # ----------------------------------------------------------------- poliglota
@@ -232,7 +279,7 @@ PT_TOP_FORMS = 30_000  # Portuguese has no lemma ranking: its most frequent subt
 VOCAB_SCHEMA = {
     "palavra": pl.String, "rank": pl.Int64, "share": pl.Float64, "pos": pl.List(pl.String), "heads": pl.List(pl.String),
     "first_head": pl.String, "first_heads": pl.List(pl.String), "forma_de": pl.List(pl.String), "etimos": pl.List(pl.String), "cognatos": pl.List(pl.String),
-    "glosas": pl.List(pl.String), "traducoes": pl.List(pl.String),
+    "glosas": pl.List(pl.String), "traducoes": pl.List(pl.String), "roman": pl.String, "tradicional": pl.String,
 }  # fmt: skip
 
 
@@ -261,6 +308,8 @@ def _vocab_row(palavra: str, rank: int, share: float, every: list, main: list, e
         # Only the main part of speech: "will" the modal verb has no table,
         # and its noun's ("arbítrio") would be wrong.
         "traducoes": list(dict.fromkeys(t for e in main if e.pos == main[0].pos for t in e.traducoes)),
+        "roman": next((e.roman for e in main if e.roman), None),
+        "tradicional": next((e.tradicional for e in main if e.tradicional), None),
     }
 
 
@@ -299,6 +348,9 @@ def _words(lang: Lang) -> dict[str, conceitos.Word]:
             r = dict(r)
             r.pop("traducoes")
             out[key] = conceitos.Word(lang=lang.code, **{k: set(v) if isinstance(v, list) and k != "glosas" else v for k, v in r.items()})
+            # Chinese subtitles' traditional spellings point at the same word.
+            if r["tradicional"] and r["tradicional"].lower() not in out:
+                out[r["tradicional"].lower()] = out[key]
     return out
 
 

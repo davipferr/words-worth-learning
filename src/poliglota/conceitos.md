@@ -5,7 +5,7 @@ toc: false
 
 # Conceitos lado a lado
 
-O mesmo conceito em seis línguas, na ordem de frequência do inglês. A cor diz quanto cada palavra se parece com a portuguesa.
+O mesmo conceito em oito línguas, na ordem de frequência do inglês. A cor diz quanto cada palavra se parece com a portuguesa.
 
 ```js
 import {parquet} from "../components/parquet.js";
@@ -28,7 +28,7 @@ html`<div class="legend-row">${CLASSES.map((c) => html`<span><i style=${{backgro
 const filtros = view(
   Inputs.form(
     {
-      completos: Inputs.toggle({label: "Só com palavra nas seis línguas", value: true}),
+      completos: Inputs.toggle({label: "Só com palavra em todas as línguas", value: true}),
       lingua: Inputs.select(new Map([["qualquer língua", null], ...ALVOS.filter((c) => c !== "en").map((c) => [NOMES[c], c])]), {label: "Igual ou parecida em"}),
       classes: Inputs.select(new Map([["Todas", null], ["Substantivos", "noun"], ["Verbos", "verb"], ["Adjetivos", "adj"], ["Advérbios", "adv"]]), {label: "Classe"})
     },
@@ -40,11 +40,11 @@ const filtros = view(
 ```js
 const filtrados = conceitos.filter(
   (d) =>
-    (!filtros.completos || (d.palavra_pt && d.n_linguas === 4)) &&
+    (!filtros.completos || (d.palavra_pt && d.n_linguas === ALVOS.length - 1)) &&
     (!filtros.classes || d.classe === filtros.classes) &&
     (!filtros.lingua || ["igual", "parecida"].includes(d[`vs_pt_${filtros.lingua}`]))
 );
-const busca = view(Inputs.search(filtrados, {placeholder: "Buscar em qualquer língua…", columns: ["conceito", "palavra_pt", "palavra_es", "palavra_fr", "palavra_it", "palavra_de"], format: resultados, width: 320}));
+const busca = view(Inputs.search(filtrados, {placeholder: "Buscar em qualquer língua…", columns: ["conceito", "palavra_pt", "palavra_es", "palavra_fr", "palavra_it", "palavra_de", "palavra_ja", "palavra_zh"], format: resultados, width: 320}));
 ```
 
 ```js
@@ -66,9 +66,9 @@ function celula(code) {
 
 ```js
 Inputs.table(busca, {
-  columns: ["rank_en", "palavra_pt", "palavra_en", "palavra_es", "palavra_fr", "palavra_it", "palavra_de", "classe_pt"],
-  header: {rank_en: "Nº", palavra_pt: "Português", palavra_en: "Inglês", palavra_es: "Espanhol", palavra_fr: "Francês", palavra_it: "Italiano", palavra_de: "Alemão", classe_pt: "Classe"},
-  format: {rank_en: num, palavra_en: celula("en"), palavra_es: celula("es"), palavra_fr: celula("fr"), palavra_it: celula("it"), palavra_de: celula("de")},
+  columns: ["rank_en", "palavra_pt", "palavra_en", "palavra_es", "palavra_fr", "palavra_it", "palavra_de", "palavra_ja", "palavra_zh", "classe_pt"],
+  header: {rank_en: "Nº", palavra_pt: "Português", palavra_en: "Inglês", palavra_es: "Espanhol", palavra_fr: "Francês", palavra_it: "Italiano", palavra_de: "Alemão", palavra_ja: "Japonês", palavra_zh: "Chinês", classe_pt: "Classe"},
+  format: {rank_en: num, palavra_en: celula("en"), palavra_es: celula("es"), palavra_fr: celula("fr"), palavra_it: celula("it"), palavra_de: celula("de"), palavra_ja: celula("ja"), palavra_zh: celula("zh")},
   width: {rank_en: 56},
   sort: "rank_en",
   rows: 20,
@@ -81,7 +81,7 @@ Inputs.table(busca, {
 
 ## Baralho para o Anki
 
-Um cartão por conceito: na frente, a palavra em português; no verso, as cinco línguas, cada uma com a pronúncia e a marca de semelhança com o português, e lidas em voz alta pelo Anki. Os cartões novos seguem a ordem de frequência e têm identificadores fixos, como os baralhos da seção [Vocabulário](../vocabulario/anki).
+Um cartão por conceito: na frente, a palavra em português; no verso, as sete línguas, cada uma com a pronúncia e a marca de semelhança com o português, e lidas em voz alta pelo Anki. Os cartões novos seguem a ordem de frequência e têm identificadores fixos, como os baralhos da seção [Vocabulário](../vocabulario/anki).
 
 ```js
 html`<p><a class="botao" href=${baralho.href} download="poliglota.apkg">Baixar o baralho Poliglota (${num(conceitos.filter((d) => d.palavra_pt).length)} conceitos)</a></p>`
@@ -91,7 +91,7 @@ html`<p><a class="botao" href=${baralho.href} download="poliglota.apkg">Baixar o
 const exportar = view(Inputs.button(`Baixar os ${num(busca.length)} conceitos filtrados (.txt para o Anki)`, {value: null, reduce: () => baixar("poliglota.txt", tsvPoliglota(busca))}));
 ```
 
-<p class="muted small">O verso lê as cinco palavras em sequência; para ouvir uma de cada vez, desligue a reprodução automática nas opções do baralho e clique no ícone de som de cada língua.</p>
+<p class="muted small">O verso lê as sete palavras em sequência; para ouvir uma de cada vez, desligue a reprodução automática nas opções do baralho e clique no ícone de som de cada língua.</p>
 
 <style>
 .filtros { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }

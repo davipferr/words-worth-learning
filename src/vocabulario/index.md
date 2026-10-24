@@ -5,7 +5,7 @@ toc: false
 
 # Vocabulário: as palavras que valem a pena
 
-<p class="lede">Quais palavras aprender primeiro em inglês, espanhol, francês, italiano e alemão? Contamos as palavras de centenas de milhões de falas de filmes e séries (OpenSubtitles), juntamos as formas de cada palavra ("estoy", "estaba", "estuvo" → <em>estar</em>) e ordenamos da mais útil para a menos útil. Cada lista vira um baralho do Anki.</p>
+<p class="lede">Quais palavras aprender primeiro em inglês, espanhol, francês, italiano, alemão, japonês e chinês? Contamos as palavras de centenas de milhões de falas de filmes e séries (OpenSubtitles), juntamos as formas de cada palavra ("estoy", "estaba", "estuvo" → <em>estar</em>) e ordenamos da mais útil para a menos útil. Cada lista vira um baralho do Anki.</p>
 
 ```js
 import {parquet} from "../components/parquet.js";
@@ -24,10 +24,12 @@ const linguas = LINGUAS.filter((l) => resumo.linguas.some((r) => r.codigo === l.
 const porCodigo = Object.fromEntries(resumo.linguas.map((r) => [r.codigo, r]));
 const em1000 = resumo.linguas.map((r) => r.cobertura_em["1000"]);
 const para90 = resumo.linguas.map((r) => r.para["90"]).filter((d) => d != null);
+// Languages whose 10,000 most frequent words don't reach 90% (Chinese).
+const sem90 = resumo.linguas.filter((r) => r.para["90"] == null).map((r) => LINGUAS.find((l) => l.codigo === r.codigo)?.nome.toLowerCase());
 ```
 
 <div class="card hero">
-  <h2 class="hero-title">Com as 1.000 palavras mais frequentes você reconhece de ${pct(d3.min(em1000))} a ${pct(d3.max(em1000))} de tudo o que se fala em filmes e séries. Chegar a 90% custa entre ${num(d3.min(para90))} e ${num(d3.max(para90))} palavras.</h2>
+  <h2 class="hero-title">Com as 1.000 palavras mais frequentes você reconhece de ${pct(d3.min(em1000))} a ${pct(d3.max(em1000))} de tudo o que se fala em filmes e séries. Chegar a 90% custa entre ${num(d3.min(para90))} e ${num(d3.max(para90))} palavras${sem90.length ? `; em ${sem90.join(" e ")}, mais de 10.000` : ""}.</h2>
   ${legenda(pal, linguas)}
   ${resize((width) => curvas(cobertura, {width, pal, linguas, alvo: 0.9, height: Math.min(420, Math.max(280, width * 0.45))}))}
   <p class="muted small">Cada linha mostra, para as N palavras mais frequentes de uma língua (eixo em escala logarítmica), a parcela de todas as palavras ditas nas legendas que elas cobrem. Linha tracejada: 90%. Nomes próprios e palavras que o Wiktionary não conhece nunca contam como "aprendidos". <a href="./cobertura">Mais sobre a cobertura →</a></p>
@@ -35,7 +37,7 @@ const para90 = resumo.linguas.map((r) => r.para["90"]).filter((d) => d != null);
 
 ```js
 // One card per language; the click remembers the language for the Palavras page.
-html`<div class="grid grid-cols-${Math.min(linguas.length, 5)}">${linguas.map((l) => {
+html`<div class="grid grid-cols-${Math.min(linguas.length, 4)}">${linguas.map((l) => {
   const r = porCodigo[l.codigo];
   const lembrar = () => {
     try {
@@ -44,9 +46,13 @@ html`<div class="grid grid-cols-${Math.min(linguas.length, 5)}">${linguas.map((l
   };
   return html`<a class="card card-link" href="./palavras" onclick=${lembrar}>
     <h2><i class="dot" style=${{background: cor[l.codigo]}}></i>${l.nome}</h2>
-    <span class="big">${num(r.para["90"])}</span>
-    <p class="muted">palavras para reconhecer 90% do que se fala; ${num(r.para["80"])} para 80%</p>
-    <p class="muted small">${num(r.tokens / 1e6)} milhões de palavras nas legendas · ${num(r.com_frase)} das ${num(resumo.palavras_por_lingua)} palavras com frase de exemplo</p>
+    ${r.para["90"] != null
+      ? html`<span class="big">${num(r.para["90"])}</span>
+        <p class="muted">palavras para reconhecer 90% do que se fala; ${num(r.para["80"])} para 80%</p>`
+      : // The ranking stops at 10,000 words: say how far those go instead.
+        html`<span class="big">+10.000</span>
+        <p class="muted">palavras para reconhecer 90% do que se fala: as 10.000 mais frequentes chegam a ${pct(r.cobertura_em["10000"])}; ${num(r.para["80"])} para 80%</p>`}
+    <p class="muted small">${r.fonte === "wordfreq" ? "frequências do wordfreq (legendas, Wikipédia, notícias)" : `${num(r.tokens / 1e6)} milhões de palavras nas legendas`} · ${num(r.com_frase)} das ${num(resumo.palavras_por_lingua)} palavras com frase de exemplo</p>
   </a>`;
 })}</div>`
 ```

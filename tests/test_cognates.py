@@ -36,3 +36,17 @@ def test_false_friends_rules():
     assert not false_friends("visto", {"seen"}, {"visa"}, {"ver"}, {"vedere"})
     # English lists itself as its meaning, so its side is left out of the loan check.
     assert false_friends("pain", {"pain"}, {"bread"}, set(), set(), loans={"bread"})
+
+
+def test_cjk_comparisons():
+    from pipeline.cognates import classify, spellings
+
+    pan = ("ja", "パン", {"pt:pao"}, set(), "pan", None)
+    pao = ("pt", "pão", set(), set())
+    assert spellings(pan, "pt") == ["pan"]
+    assert classify(pan, pao)[0] == "parecida"
+    # Native Japanese words never match Latin ones by romaji.
+    kane = ("ja", "金", set(), set(), "kane", None)
+    assert spellings(kane, "it") == [] and classify(kane, ("it", "cane", set(), set()))[0] == "diferente"
+    # Japanese 電話 is Chinese 電話 (traditional) / 电话 (simplified).
+    assert classify(("ja", "電話", set(), set(), "denwa", None), ("zh", "电话", set(), set(), "dianhua", "電話"))[0] == "igual"

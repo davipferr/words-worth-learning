@@ -20,15 +20,18 @@ Nenhuma fonte exige chave ou cadastro.
 
 | Fonte | O que usamos | Licença |
 | --- | --- | --- |
-| [FrequencyWords](https://github.com/hermitdave/FrequencyWords) (OpenSubtitles 2018) | Quantas vezes cada forma de palavra aparece nas legendas de filmes e séries de cada língua | CC BY-SA 4.0 |
+| [FrequencyWords](https://github.com/hermitdave/FrequencyWords) (OpenSubtitles 2018) | Quantas vezes cada forma de palavra aparece nas legendas de filmes e séries de cada língua (o chinês já vem segmentado em palavras) | CC BY-SA 4.0 |
+| [wordfreq](https://github.com/rspeer/wordfreq) | Frequências do japonês: a lista de legendas do FrequencyWords perdeu todo o hiragana (sem partículas, verbos cortados), então o japonês usa o wordfreq, segmentado com MeCab e que mistura legendas, Wikipédia, notícias e redes sociais | CC BY-SA 4.0 |
+| [CC-CEDICT](https://cc-cedict.org) | Definições e pinyin do chinês, uma linha por leitura (o Wiktionary agrupa os sentidos de cada caractere por etimologia, a mais antiga primeiro) | CC BY-SA 4.0 |
 | [Wiktionary](https://en.wiktionary.org) em inglês, extraído pelo [kaikki.org](https://kaikki.org) | Qual palavra de dicionário cada forma representa, classe, gênero, pronúncia (IPA), definições, etimologia; na seção Poliglota, as tabelas de tradução e os ancestrais de cada palavra (também para o português) | CC BY-SA 4.0 |
-| [Universal Dependencies](https://universaldependencies.org) (EWT, AnCora, GSD, ISDT) | Textos anotados à mão, usados para decidir formas ambíguas | CC BY-SA / CC BY / CC BY-NC-SA |
+| [Universal Dependencies](https://universaldependencies.org) (EWT, AnCora, GSD, ISDT, Japanese GSD, Chinese GSDSimp) | Textos anotados à mão, usados para decidir formas ambíguas, a classe gramatical e, no chinês, a leitura de cada palavra | CC BY-SA / CC BY / CC BY-NC-SA |
 | [Tatoeba](https://tatoeba.org) | Frases de exemplo e suas traduções | CC BY 2.0 FR |
 
 ```js
 Inputs.table(
-  linguas.map((l) => ({lingua: l.nome, tokens: por[l.codigo].tokens, formas: por[l.codigo].formas, palavras: por[l.codigo].palavras_dicionario})),
-  {header: {lingua: "Língua", tokens: "Palavras nas legendas", formas: "Formas distintas", palavras: "Palavras de dicionário encontradas"}, format: {tokens: num, formas: num, palavras: num}, sort: null, select: false, layout: "auto"}
+  // wordfreq gives proportions, not counts: no subtitle total for Japanese.
+  linguas.map((l) => ({lingua: l.nome, tokens: por[l.codigo].fonte === "wordfreq" ? "— (wordfreq)" : por[l.codigo].tokens, formas: por[l.codigo].formas, palavras: por[l.codigo].palavras_dicionario})),
+  {header: {lingua: "Língua", tokens: "Palavras nas legendas", formas: "Formas distintas", palavras: "Palavras de dicionário encontradas"}, format: {tokens: (d) => (typeof d === "string" ? d : num(d)), formas: num, palavras: num}, sort: null, select: false, layout: "auto"}
 )
 ```
 
@@ -75,11 +78,18 @@ Inputs.table(
 )
 ```
 
+## Japonês e chinês
+
+Escritos sem espaços. As listas de frequência já vêm segmentadas; as frases do Tatoeba são segmentadas pela correspondência mais longa com as 50.000 formas mais frequentes da língua. Tokens em alfabeto latino nessas listas (linhas em inglês de legendas bilíngues) ficam fora do total.
+
+- **Japonês.** Os verbos e adjetivos aparecem nas listas como pedaços (書き, 書い de 書いた); as tabelas de conjugação do Wiktionary levam cada pedaço ao verbo (書く). A pronúncia é a leitura em kana e o romaji. Partículas e auxiliares (の, は, た, ます) são palavras da lista.
+- **Chinês.** Sem flexão: cada palavra é ela mesma (o corpus anotado reduz 我们 a 我, então o pipeline não usa os seus lemas). Grafias tradicionais nas legendas (我們) contam para a simplificada (我们). Definições e pinyin vêm do CC-CEDICT, na leitura que o corpus anotado usa (的 é *de*, a partícula, não *dì*, "alvo").
+
 ## Poliglota
 
 **Conceitos.** Cada uma das 5.000 palavras mais frequentes do inglês (com a sua classe principal) é um conceito. As palavras equivalentes em português, espanhol, francês, italiano e alemão vêm da tabela de tradução dessa entrada do Wiktionary, só da mesma classe. As tabelas têm sentidos raros misturados ("dog" lista *vaca*, uma gíria), então uma palavra só é aceita se estiver entre as 10.000 mais frequentes da sua língua (no português, entre as 30.000 formas mais frequentes das legendas). Entre as candidatas, vence a que tem o conceito na primeira definição ("aller": "to go"), depois a que o tem em qualquer definição, a mais frequente primeiro. Uma candidata cuja definição não confirma o sentido só entra se for uma das duas primeiras da tabela. Sem candidata, vale a palavra mais frequente da língua cuja primeira definição é o conceito.
 
-**Semelhança.** Os acentos são ignorados. *Igual*: mesma grafia. *Parecida*: uma letra de diferença (palavras com pelo menos 2 letras), ou, com 4 letras ou mais, distância de edição de no máximo metade do comprimento da palavra mais longa. *Mesma origem*: um ancestral em comum na etimologia do Wiktionary (latim, protogermânico…, mas não o proto-indo-europeu, que aproximaria quase tudo), ou uma palavra citada como ancestral ou cognata da outra.
+**Semelhança.** Os acentos são ignorados. Japonês e chinês só se comparam com as línguas de alfabeto latino pelas palavras japonesas em katakana (empréstimos), pela transcrição em romaji; entre si, comparam caracteres (o japonês e o chinês tradicional ou simplificado), sem a classe "parecida". *Igual*: mesma grafia. *Parecida*: uma letra de diferença (palavras com pelo menos 2 letras), ou, com 4 letras ou mais, distância de edição de no máximo metade do comprimento da palavra mais longa. *Mesma origem*: um ancestral em comum na etimologia do Wiktionary (latim, protogermânico…, mas não o proto-indo-europeu, que aproximaria quase tudo), ou uma palavra citada como ancestral ou cognata da outra.
 
 **Vantagem.** Para a língua B e a língua de partida A: soma das ocorrências nas legendas de B das palavras de B (entre as 5.000 mais frequentes) cuja equivalente em A é igual ou parecida, dividida pelo total de palavras ditas em B. Se uma palavra de B aparece em vários conceitos, vale a melhor semelhança.
 

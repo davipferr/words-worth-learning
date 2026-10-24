@@ -42,7 +42,17 @@ const arquivos = {
   "de-0501-1000.apkg": FileAttachment("../data/decks/de-0501-1000.apkg"),
   "de-1001-2000.apkg": FileAttachment("../data/decks/de-1001-2000.apkg"),
   "de-2001-3000.apkg": FileAttachment("../data/decks/de-2001-3000.apkg"),
-  "de-3001-5000.apkg": FileAttachment("../data/decks/de-3001-5000.apkg")
+  "de-3001-5000.apkg": FileAttachment("../data/decks/de-3001-5000.apkg"),
+  "ja-0001-0500.apkg": FileAttachment("../data/decks/ja-0001-0500.apkg"),
+  "ja-0501-1000.apkg": FileAttachment("../data/decks/ja-0501-1000.apkg"),
+  "ja-1001-2000.apkg": FileAttachment("../data/decks/ja-1001-2000.apkg"),
+  "ja-2001-3000.apkg": FileAttachment("../data/decks/ja-2001-3000.apkg"),
+  "ja-3001-5000.apkg": FileAttachment("../data/decks/ja-3001-5000.apkg"),
+  "zh-0001-0500.apkg": FileAttachment("../data/decks/zh-0001-0500.apkg"),
+  "zh-0501-1000.apkg": FileAttachment("../data/decks/zh-0501-1000.apkg"),
+  "zh-1001-2000.apkg": FileAttachment("../data/decks/zh-1001-2000.apkg"),
+  "zh-2001-3000.apkg": FileAttachment("../data/decks/zh-2001-3000.apkg"),
+  "zh-3001-5000.apkg": FileAttachment("../data/decks/zh-3001-5000.apkg")
 };
 const linguas = LINGUAS.filter((l) => resumo.linguas.some((r) => r.codigo === l.codigo));
 ```

@@ -57,3 +57,32 @@ def lemma_counts(treebank: str) -> pl.DataFrame:
         schema={"forma": pl.String, "lema": pl.String, "upos": pl.String, "n": pl.Int64},
         orient="row",
     )
+
+
+def parse_translit(lines: Iterable[str]) -> Counter:
+    """Counter of (lemma, lemma transliteration) from the MISC column
+    (``LTranslit=shuō``), which the Chinese treebank fills with pinyin."""
+    counts: Counter = Counter()
+    for line in lines:
+        if not line or line[0] in "#\n":
+            continue
+        cols = line.rstrip("\n").split("\t")
+        if len(cols) < 10 or not cols[0].isdigit():
+            continue
+        for item in cols[9].split("|"):
+            if item.startswith("LTranslit="):
+                counts[(cols[2], item.split("=", 1)[1])] += 1
+    return counts
+
+
+def lemma_translit(treebank: str) -> dict[str, str]:
+    """Most frequent transliteration of each lemma."""
+    counts: Counter = Counter()
+    for url in urls(treebank):
+        with download(url, max_age=MAX_AGE).open(encoding="utf-8") as fh:
+            counts.update(parse_translit(fh))
+    best: dict[str, tuple[int, str]] = {}
+    for (lemma, translit), n in counts.items():
+        if lemma not in best or n > best[lemma][0]:
+            best[lemma] = (n, translit)
+    return {lemma: t for lemma, (_, t) in best.items()}

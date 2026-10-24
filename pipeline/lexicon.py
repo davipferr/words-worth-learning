@@ -23,6 +23,7 @@ from dataclasses import dataclass
 import polars as pl
 
 from .langs import Lang
+from .text import is_cjk
 
 TOP_FORMS = 50_000  # forms looked up in the dictionary (beyond that, each counts as itself)
 UD_MIN = 3  # a form needs this many treebank occurrences for the treebank to decide
@@ -43,6 +44,12 @@ class Entry:
     etimos: list[str]
     cognatos: list[str]
     traducoes: list[str]
+    roman: str | None = None
+    tradicional: str | None = None
+    flexoes: list[str] | None = None
+    # Added by ``index`` (a Japanese conjugated form, a Chinese traditional
+    # spelling), not a dictionary entry: only ever a pointer to its lemma.
+    sintetica: bool = False
 
     @property
     def is_lemma(self) -> bool:
@@ -54,10 +61,13 @@ class Entry:
         # A noun entry with any letter sense is the letter's name ("mi": the
         # note E, and the Greek letter mu); other entries need all senses to be.
         letter = any if self.pos == "noun" else all
+        # A Chinese "character" entry is the word itself (的, 是), not a letter.
+        if self.pos == "character" and is_cjk(self.palavra):
+            return False
         return self.pos in LETTER_POS or letter(_LETTER_GLOSS.search(g) for g in self.glosas)
 
 
-LETTER_POS = {"character", "symbol", "letter", "punct", "romanization", "suffix", "prefix", "infix", "interfix"}
+LETTER_POS = {"character", "symbol", "letter", "punct", "romanization", "suffix", "prefix", "infix", "interfix", "syllable"}
 _LETTER_GLOSS = re.compile(
     r"\bname of the\b.*\bletter\b|\bletter of the\b.*\balphabet\b|\b(greek|latin|cyrillic|hebrew|arabic) letter\b|\bsolf[eè]ge\b|\bnote\b.*\bscale\b", re.I
 )
@@ -68,14 +78,25 @@ def index(dic: pl.DataFrame) -> dict[str, list[Entry]]:
     idx: dict[str, list[Entry]] = defaultdict(list)
     for r in dic.iter_rows(named=True):
         idx[r["palavra"].lower()].append(Entry(**r))
+    # Japanese conjugated forms aren't entries of their own: add each as an
+    # inflection of its verb or adjective ("書き" -> 書く), after the real entries.
+    # Chinese subtitles mix in traditional spellings (我們): point them to the
+    # simplified word.
+    if "flexoes" in dic.columns:
+        for palavra, pos, flexoes in dic.filter(pl.col("flexoes").list.len() > 0).select("palavra", "pos", "flexoes").iter_rows():
+            for f in flexoes:
+                idx[f.lower()].append(Entry(f, pos, [], [palavra], None, None, None, [], [], [], sintetica=True))
+        trad = dic.filter(pl.col("tradicional").is_not_null(), pl.col("tradicional") != pl.col("palavra"))
+        for palavra, pos, tradicional in trad.select("palavra", "pos", "tradicional").unique().iter_rows():
+            idx[tradicional.lower()].append(Entry(tradicional, pos, [], [palavra], None, None, None, [], [], [], sintetica=True))
     return idx
 
 
 # Universal Dependencies part-of-speech tags -> Wiktionary's.
 UPOS = {
-    "NOUN": {"noun"}, "VERB": {"verb"}, "AUX": {"verb"}, "ADJ": {"adj"}, "ADV": {"adv"}, "PRON": {"pron"},
-    "DET": {"det", "article", "pron"}, "ADP": {"prep", "contraction"}, "CCONJ": {"conj"}, "SCONJ": {"conj"},
-    "NUM": {"num"}, "INTJ": {"intj"}, "PART": {"particle", "adv"},
+    "NOUN": {"noun"}, "VERB": {"verb"}, "AUX": {"verb", "suffix"}, "ADJ": {"adj"}, "ADV": {"adv"}, "PRON": {"pron"},
+    "DET": {"det", "article", "pron"}, "ADP": {"prep", "contraction", "particle", "postp"}, "CCONJ": {"conj", "particle"},
+    "SCONJ": {"conj", "particle"}, "NUM": {"num"}, "INTJ": {"intj"}, "PART": {"particle", "adv", "suffix"},
 }  # fmt: skip
 
 
@@ -87,7 +108,9 @@ def main_entries(entries: list[Entry], lemma: str, upos: str | None = None) -> l
     lemmas = [e for e in entries if e.is_lemma]
     exact = [e for e in lemmas if e.palavra == lemma] or lemmas
     wanted = UPOS.get(upos or "", set())
-    return sorted(exact, key=lambda e: (e.is_letter, e.pos not in wanted))
+    # An entry with the treebank's part of speech is never demoted as an affix:
+    # Japanese auxiliaries (た, ます) are "suffix" entries.
+    return sorted(exact, key=lambda e: 0 if e.pos in wanted else 2 if e.is_letter else 1)
 
 
 def _lemma_word(entries: list[Entry], form: str) -> str:
@@ -120,7 +143,7 @@ def _treebank_lemma(lemma: str, upos: str, idx: dict[str, list[Entry]]) -> str |
     wanted = UPOS.get(upos, set())
     if word and wanted and not any(e.is_lemma and not e.is_letter and e.pos in wanted for e in entries):
         for e in entries:
-            if e.pos in wanted:
+            if e.pos in wanted and not e.sintetica:
                 for t in e.forma_de:
                     if target := _known(t, idx):
                         return target
@@ -153,7 +176,9 @@ def resolve(form: str, idx: dict[str, list[Entry]], lang: Lang, ud: dict[str, li
     # A form that is also an inflection keeps its own entry only when that
     # entry is substantial: "flores" is the plural of "flor" far more often than
     # it is its single, obscure sense ("menstruation").
-    if any(e.is_lemma for e in entries) and not (inflects and senses <= 1):
+    # (Not for Chinese and Japanese: their "variant of" links aren't inflections;
+    # 她, "she", is listed as a variant of 伊.)
+    if any(e.is_lemma for e in entries) and not (inflects and senses <= 1 and not lang.cjk):
         return "lema", [(_lemma_word(entries, form), 1.0)]
     targets: list[str] = []
     for e in entries:

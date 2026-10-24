@@ -26,8 +26,8 @@ from itertools import combinations
 from . import cognates
 from .text import fold
 
-ORIGENS = ["pt", "en", "es", "fr", "it", "de"]  # rows of the advantage matrix
-ALVOS = ["en", "es", "fr", "it", "de"]  # columns: the languages the site teaches
+ORIGENS = ["pt", "en", "es", "fr", "it", "de", "ja", "zh"]  # rows of the advantage matrix
+ALVOS = ["en", "es", "fr", "it", "de", "ja", "zh"]  # columns: the languages the site teaches
 RECONHECIVEL = {"igual", "parecida"}
 
 
@@ -47,10 +47,12 @@ class Word:
     etimos: set[str] = field(default_factory=set)
     cognatos: set[str] = field(default_factory=set)
     glosas: list[str] = field(default_factory=list)
+    roman: str | None = None  # Japanese romaji, Chinese toneless pinyin
+    tradicional: str | None = None  # Chinese traditional spelling
 
     @property
-    def key(self) -> tuple[str, str, set[str], set[str]]:
-        return self.lang, self.palavra, self.etimos, self.cognatos
+    def key(self) -> tuple:
+        return self.lang, self.palavra, self.etimos, self.cognatos, self.roman, self.tradicional
 
 
 @dataclass
@@ -105,7 +107,7 @@ def align(concepts: list[Concept], vocabs: dict[str, dict[str, Word]]) -> list[d
         row = {"conceito": c.conceito, "classe": c.classe, "rank_en": c.rank_en}
         en = vocabs["en"].get(c.conceito.lower())
         row["en"] = en
-        for lang in ORIGENS:
+        for lang in (lang for lang in ORIGENS if lang in vocabs):
             if lang == "en":
                 continue
             w, ok = choose(c, lang, vocabs[lang], reverses[lang])
@@ -131,7 +133,7 @@ def advantage(aligned: list[dict], vocabs: dict[str, dict[str, Word]], top: int 
     """The advantage matrix: for each (A, B), the share of B's tokens that are
     recognisable from A, of same origin only, and aligned at all."""
     out = []
-    for b in ALVOS:
+    for b in (b for b in ALVOS if b in vocabs):
         # For each word of B, the best class it reaches against each A, over
         # every concept where it is B's word.
         best: dict[str, dict[str, str]] = defaultdict(dict)
@@ -148,8 +150,9 @@ def advantage(aligned: list[dict], vocabs: dict[str, dict[str, Word]], top: int 
                 if prev is None or cognates.CLASSES.index(classe) < cognates.CLASSES.index(prev):
                     best[a][wb.palavra] = classe
                     partner[a][wb.palavra] = row[a].palavra
-        words_b = [w for w in vocabs[b].values() if w.rank <= top]
-        for a in ORIGENS:
+        # Unique words: Chinese vocabularies also index traditional spellings.
+        words_b = list({w.palavra: w for w in vocabs[b].values() if w.rank <= top}.values())
+        for a in (a for a in ORIGENS if a in vocabs):
             if a == b:
                 continue
             share = {c: 0.0 for c in cognates.CLASSES}
@@ -185,11 +188,15 @@ def false_friend_pairs(vocabs: dict[str, dict[str, Word]], linked: set[tuple[str
     concept, which are never false friends."""
     by_fold: dict[str, dict[str, Word]] = defaultdict(dict)
     for lang, vocab in vocabs.items():
-        for w in vocab.values():
-            if w.rank <= top and len(fold(w.palavra)) >= 3:
-                f = fold(w.palavra)
-                if lang not in by_fold[f] or w.rank < by_fold[f][lang].rank:
-                    by_fold[f][lang] = w
+        for w in {w.palavra: w for w in vocab.values()}.values():
+            # Latin words need three letters to mean anything; Chinese and
+            # Japanese words two characters (手紙: "letter" in Japanese,
+            # "toilet paper" in Chinese). Chinese also by its traditional spelling.
+            keys = {fold(w.palavra)} | ({fold(w.tradicional)} if w.tradicional else set())
+            for f in keys:
+                if w.rank <= top and len(f) >= (2 if lang in cognates.CJK else 3):
+                    if lang not in by_fold[f] or w.rank < by_fold[f][lang].rank:
+                        by_fold[f][lang] = w
     out = []
     for words in by_fold.values():
         for a, b in combinations([lang for lang in ORIGENS if lang in words], 2):
@@ -197,6 +204,11 @@ def false_friend_pairs(vocabs: dict[str, dict[str, Word]], linked: set[tuple[str
             if (a, wa.palavra, b, wb.palavra) in linked or (b, wb.palavra, a, wa.palavra) in linked:
                 continue
             loans = (set() if a == "en" else wa.heads) | (set() if b == "en" else wb.heads)
+            # Japanese and Chinese words with the same characters are usually
+            # near-synonyms glossed differently (現場 "actual spot", 现场 "scene;
+            # spot"): between them, any shared gloss word rules a pair out.
+            if a in cognates.CJK and b in cognates.CJK and cognates.gloss_words(wa.glosas) & cognates.gloss_words(wb.glosas):
+                continue
             if cognates.false_friends(wa.palavra, wa.heads, wb.heads, wa.forma_de, wb.forma_de, loans):
                 out.append(
                     {

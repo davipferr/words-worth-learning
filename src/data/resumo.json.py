@@ -29,7 +29,8 @@ for lang in selected():
             "codigo": lang.code,
             "nome": lang.nome,
             "tokens": total,
-            "formas": frames.formas(lang.code).height,
+            "fonte": lang.freq_fonte,  # "wordfreq": tokens are proportions scaled to a billion, not a count
+            "formas": frames.formas(lang.freq_code).height,
             "palavras_dicionario": int(lm.filter(pl.col("tipo") == "palavra").height),
             "para": {str(int(p * 100)): words_for(cov, p) for p in (0.5, 0.8, 0.9, 0.95)},
             "formas_para": {str(int(p * 100)): (int(cov.filter(pl.col("cobertura_formas") >= p)["rank"].min()) if cov.filter(pl.col("cobertura_formas") >= p).height else None) for p in (0.5, 0.8, 0.9)},

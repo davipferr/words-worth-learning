@@ -1,9 +1,9 @@
 import * as Plot from "npm:@observablehq/plot";
 import {pct} from "./format.js";
 
-export const NOMES = {pt: "Português", en: "Inglês", es: "Espanhol", fr: "Francês", it: "Italiano", de: "Alemão"};
-export const ORIGENS = ["pt", "en", "es", "fr", "it", "de"];
-export const ALVOS = ["en", "es", "fr", "it", "de"];
+export const NOMES = {pt: "Português", en: "Inglês", es: "Espanhol", fr: "Francês", it: "Italiano", de: "Alemão", ja: "Japonês", zh: "Chinês"};
+export const ORIGENS = ["pt", "en", "es", "fr", "it", "de", "ja", "zh"];
+export const ALVOS = ["en", "es", "fr", "it", "de", "ja", "zh"];
 export const CLASSES = ["igual", "parecida", "mesma origem", "diferente"];
 
 /** Class colours: the two "recognisable" classes in strong hues, the rest muted. */
@@ -46,14 +46,22 @@ export function matriz(vantagem, {width, pal, y = "reconhecivel", destaque}) {
     marginTop: 34,
     padding: 0.06,
     style: {fontSize: narrow ? "11px" : "12px"},
-    x: {domain: ALVOS, tickFormat: nome, axis: "top", label: "Quero aprender →", tickSize: 0},
+    x: {domain: ALVOS, tickFormat: nome, axis: "top", label: narrow ? "Quero aprender (%) →" : "Quero aprender →", tickSize: 0},
     y: {domain: ORIGENS, tickFormat: (d) => (d === "pt" ? `${nome(d)} ★` : nome(d)), label: "Já sei ↓", tickSize: 0},
     color: {type: "linear", domain: [0, max], range: pal.blues(2), legend: false},
     marks: [
       // Plot drops marks whose channel value is null, so "no outline" must be "none".
       Plot.cell(vantagem, {x: "alvo", y: "origem", fill: y, rx: 4, stroke: (d) => (destaque && destaque(d) ? "currentColor" : "none"), strokeWidth: 2}),
       // Dark-only site: the ramp runs dark -> light, so strong cells get dark text.
-      Plot.text(vantagem, {x: "alvo", y: "origem", text: (d) => pct(d[y]), fill: (d) => (d[y] > max * 0.55 ? "#111" : "currentColor"), fontSize: 13, fontWeight: 600}),
+      // Phones: bare numbers (the caption says they are percentages), smaller.
+      Plot.text(vantagem, {
+        x: "alvo",
+        y: "origem",
+        text: (d) => (narrow ? String(Math.round(d[y] * 100)) : pct(d[y])),
+        fill: (d) => (d[y] > max * 0.55 ? "#111" : "currentColor"),
+        fontSize: narrow ? 11 : 13,
+        fontWeight: 600
+      }),
       Plot.tip(
         vantagem,
         Plot.pointer({

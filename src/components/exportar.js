@@ -6,7 +6,7 @@
 // the deck GUIDs with a suffix, so a custom list never collides with notes
 // imported from the ready-made .apkg decks (which use another note type).
 
-import {escRegex} from "./format.js";
+import {cjk, escRegex} from "./format.js";
 
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 // Fields can't contain tabs or newlines in this format.
@@ -15,7 +15,7 @@ const campo = (s) => s.replace(/[\t\r\n]+/g, " ");
 function realce(texto, forma) {
   const t = esc(texto);
   if (!forma) return t;
-  const re = new RegExp(`(?<![\\p{L}])${escRegex(esc(forma))}(?![\\p{L}])`, "iu");
+  const re = new RegExp(cjk(forma) ? escRegex(esc(forma)) : `(?<![\\p{L}])${escRegex(esc(forma))}(?![\\p{L}])`, "iu");
   return t.replace(re, (m) => `<b>${m}</b>`);
 }
 
@@ -55,7 +55,7 @@ export function baixar(nome, texto) {
   return nome;
 }
 
-const LINGUAS_POLIGLOTA = [["en", "Inglês"], ["es", "Espanhol"], ["fr", "Francês"], ["it", "Italiano"], ["de", "Alemão"]];
+const LINGUAS_POLIGLOTA = [["en", "Inglês"], ["es", "Espanhol"], ["fr", "Francês"], ["it", "Italiano"], ["de", "Alemão"], ["ja", "Japonês"], ["zh", "Chinês"]];
 
 /** Concepts as an Anki text import: Portuguese word in front, five languages behind. */
 export function tsvPoliglota(conceitos) {

@@ -18,3 +18,14 @@ def test_fold_and_similarity():
     assert fold("Straße") == "strasse"
     assert similarity("casa", "casa") == 1
     assert similarity("noche", "noite") == 0.6
+
+
+def test_segment_and_cjk_tokens():
+    from pipeline.text import is_cjk, segment, tokenize_cjk
+
+    assert segment("我们知道", {"我们", "知道", "我"}) == ["我们", "知道"]
+    assert segment("我去", {"我们"}) == ["我", "去"]  # unknown characters stand alone
+    assert tokenize_cjk("Tomは学生です。", {"は", "学生", "です"}) == ["tom", "は", "学生", "です"]
+    assert is_cjk("パン") and is_cjk("电话") and not is_cjk("pão")
+    # Kana keep their voicing marks: が is not か.
+    assert fold("が") == "が" and fold("ガン") != fold("カン")

@@ -14,10 +14,13 @@ from __future__ import annotations
 import polars as pl
 
 from .langs import Lang
-from .text import tokenize
+from .text import tokenize, tokenize_cjk
 
 UNKNOWN = 1_000_000  # rank of a token that is not a learnable word
 MIN_TOKENS, MAX_TOKENS, IDEAL_TOKENS = 3, 14, 8
+# Japanese and Chinese segment into more, shorter tokens (particles, auxiliaries).
+CJK_MAX_TOKENS, CJK_IDEAL_TOKENS = 20, 11
+SEGMENT_VOCAB = 50_000  # most frequent forms the segmenter knows
 PER_WORD = 3
 # A sentence is "within reach" when its rarest other word ranks no worse than
 # the word itself, or than this floor (everyone learns the first few hundred).
@@ -39,10 +42,15 @@ def token_ranks(formas_lemas: pl.DataFrame, lemas: pl.DataFrame) -> pl.DataFrame
 
 
 def choose(sentences: pl.DataFrame, formas_lemas: pl.DataFrame, lemas: pl.DataFrame, lang: Lang, top: int) -> pl.DataFrame:
+    if lang.cjk:
+        vocab = set(formas_lemas.filter(pl.col("rank_forma") <= SEGMENT_VOCAB)["forma"].to_list())
+        split, max_tokens, ideal = (lambda s: tokenize_cjk(s, vocab)), CJK_MAX_TOKENS, CJK_IDEAL_TOKENS
+    else:
+        split, max_tokens, ideal = (lambda s: tokenize(s, lang.apostrofo)), MAX_TOKENS, IDEAL_TOKENS
     toks = (
-        sentences.select("id", pl.col("texto").map_elements(lambda s: tokenize(s, lang.apostrofo), return_dtype=pl.List(pl.String)).alias("tok"))
+        sentences.select("id", pl.col("texto").map_elements(split, return_dtype=pl.List(pl.String)).alias("tok"))
         .with_columns(pl.col("tok").list.len().alias("n_tok"))
-        .filter(pl.col("n_tok").is_between(MIN_TOKENS, MAX_TOKENS))
+        .filter(pl.col("n_tok").is_between(MIN_TOKENS, max_tokens))
         .explode("tok")
         .rename({"tok": "forma"})
     )
@@ -73,7 +81,7 @@ def choose(sentences: pl.DataFrame, formas_lemas: pl.DataFrame, lemas: pl.DataFr
         .join(sentences, on="id")
         .with_columns(
             (pl.col("dificuldade") <= pl.max_horizontal(pl.col("rank"), pl.lit(REACH_FLOOR))).alias("ao_alcance"),
-            (pl.col("n_tok") - IDEAL_TOKENS).abs().alias("dist_tam"),
+            (pl.col("n_tok") - ideal).abs().alias("dist_tam"),
         )
     )
     return (
