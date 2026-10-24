@@ -12,6 +12,7 @@ import {tsvAnki, baixar} from "../components/exportar.js";
 
 const palavras = rows(await parquet(FileAttachment("../data/palavras.parquet")));
 const frases = rows(await parquet(FileAttachment("../data/frases.parquet")));
+const resumo = await FileAttachment("../data/resumo.json").json();
 ```
 
 ```js
@@ -31,6 +32,14 @@ try {
 } catch {}
 const daLingua = palavras.filter((d) => d.lingua === lingua.codigo);
 const classes = d3.rollups(daLingua, (v) => v.length, (d) => d.classe_pt).sort((a, b) => b[1] - a[1]).map(([c]) => c);
+// Coverage goals from the Cobertura page; the list stops at 5.000, so a goal past it shows the whole list.
+const maximo = resumo.palavras_por_lingua;
+const para = resumo.linguas.find((r) => r.codigo === lingua.codigo)?.para ?? {};
+const metas = ["50", "80", "90"].map((m) => {
+  const n = para[m];
+  const rotulo = n != null && n <= maximo ? `Meta ${m}% (1–${num(n)})` : `Meta ${m}% (1–${num(maximo)}; precisaria de ${n == null ? "mais de 10.000" : num(n)})`;
+  return [rotulo, [1, Math.min(n ?? maximo, maximo)]];
+});
 ```
 
 ```js
@@ -38,7 +47,7 @@ const filtros = view(
   Inputs.form(
     {
       classes: Inputs.select(classes, {label: "Classe", multiple: true, value: [], width: 220}),
-      faixa: Inputs.select(new Map([["Todas (1–5.000)", [1, 5000]], ["1–500", [1, 500]], ["501–1.000", [501, 1000]], ["1.001–2.000", [1001, 2000]], ["2.001–3.000", [2001, 3000]], ["3.001–5.000", [3001, 5000]]]), {label: "Posição"}),
+      faixa: Inputs.select(new Map([["Todas (1–5.000)", [1, 5000]], ...metas, ["1–500", [1, 500]], ["501–1.000", [501, 1000]], ["1.001–2.000", [1001, 2000]], ["2.001–3.000", [2001, 3000]], ["3.001–5.000", [3001, 5000]]]), {label: "Posição"}),
       frase: Inputs.toggle({label: "Só com frase de exemplo"})
     },
     {template: (inputs) => html`<div class="filtros">${Object.values(inputs)}</div>`}
