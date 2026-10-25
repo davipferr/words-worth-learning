@@ -35,7 +35,7 @@ Two sections, as in `forecasts-vs-reality` (`pages` groups in `observablehq.conf
 - One note per word. The front shows the word and its class, read aloud by Anki's built-in `{{tts}}` (no audio files are bundled). The back has the IPA, Wiktionary's definitions **as written (in English, not translated)**, the most common forms and an example sentence from Tatoeba with its translation (Portuguese when Tatoeba has one, otherwise English).
 - **Stable GUIDs** (from language + word): re-importing a rebuilt deck updates existing notes and keeps their review history. New cards are due in frequency order.
 - **Poliglota deck** (`poliglota.apkg`): one note per concept that has a Portuguese word (4,045; 2,281 have a word in all eight languages), the Portuguese word on the front and the five languages on the back, each with IPA, a similarity badge and `{{tts}}`.
-- The Palavras page also exports any filtered selection as an Anki text file (`#separator:tab`, `#html:true`, `#guid column:1`; Anki ≥ 2.1.55), for custom decks such as "only verbs".
+- The Palavras page also exports any filtered selection as an Anki text file (`#separator:tab`, `#html:true`, `#guid column:4`, no column labels; Anki ≥ 2.1.55), for custom decks such as "only verbs".
 
 ## Quick start
 

@@ -6,40 +6,35 @@
 // the deck GUIDs with a suffix, so a custom list never collides with notes
 // imported from the ready-made .apkg decks (which use another note type).
 
-import {cjk, escRegex} from "./format.js";
-
 const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 // Fields can't contain tabs or newlines in this format.
 const campo = (s) => s.replace(/[\t\r\n]+/g, " ");
 
-function realce(texto, forma) {
-  const t = esc(texto);
-  if (!forma) return t;
-  const re = new RegExp(cjk(forma) ? escRegex(esc(forma)) : `(?<![\\p{L}])${escRegex(esc(forma))}(?![\\p{L}])`, "iu");
-  return t.replace(re, (m) => `<b>${m}</b>`);
-}
+// Columns: front, back, tags, GUID. No "#columns:" labels: Anki maps labels to
+// field names, and the Basic note type's fields are named per UI language
+// ("Front"/"Back", "Frente"/"Verso"...), so a mismatch made it fill fields by
+// position with the GUID first. With the GUID last, positional mapping is right.
+const CABECALHO = ["#separator:tab", "#html:true", "#tags column:3", "#guid column:4"];
 
 export function tsvAnki(palavras, frases, lingua) {
   const primeira = new Map(frases.filter((f) => f.lingua === lingua.codigo && f.ordem === 1).map((f) => [f.lema, f]));
-  const linhas = [
-    "#separator:tab",
-    "#html:true",
-    "#guid column:1",
-    "#tags column:4",
-    "#columns:GUID\tFrente\tVerso\tTags"
-  ];
+  const linhas = [...CABECALHO];
   for (const p of [...palavras].sort((a, b) => a.rank - b.rank)) {
     const f = primeira.get(p.lema);
-    const frente = `<div style="font-size:2em">${esc(p.lema)}</div><div style="opacity:.6">${esc(p.classe_pt)}</div>`;
-    const defs = (p.definicao || "").split(" · ").map((g) => `<li>${esc(g)}</li>`).join("");
-    const verso = [
-      p.ipa ? `<div>${esc(p.ipa)}</div>` : "",
-      `<ol style="text-align:left">${defs}</ol>`,
-      f ? `<div>${realce(f.texto, f.forma)}</div><div style="opacity:.6"><i>${esc(f.traducao)}</i></div>` : "",
-      `<div style="opacity:.6;font-size:.8em">nº ${p.rank} em frequência</div>`
-    ].join("");
+    // Example sentence in front, its translation behind, plus which word the card
+    // is about. Words without an example fall back to word / definitions.
+    const rodape = `<div style="opacity:.6;font-size:.8em"><b>${esc(p.lema)}</b> · nº ${p.rank} em frequência</div>`;
+    let frente, verso;
+    if (f) {
+      frente = `<div style="font-size:1.5em">${esc(f.texto)}</div>`;
+      verso = `<div style="font-size:1.5em">${esc(f.traducao)}</div>${rodape}`;
+    } else {
+      const defs = (p.definicao || "").split(" · ").map((g) => `<li>${esc(g)}</li>`).join("");
+      frente = `<div style="font-size:2em">${esc(p.lema)}</div><div style="opacity:.6">${esc(p.classe_pt)}</div>`;
+      verso = `<ol style="text-align:left">${defs}</ol>${rodape}`;
+    }
     const tags = [`wwl::${lingua.codigo}`, `classe::${p.classe_pt.replace(/ /g, "_")}`].join(" ");
-    linhas.push([`${p.guid}-txt`, frente, verso, tags].map(campo).join("\t"));
+    linhas.push([frente, verso, tags, `${p.guid}-txt`].map(campo).join("\t"));
   }
   return linhas.join("\n") + "\n";
 }
@@ -59,7 +54,7 @@ const LINGUAS_POLIGLOTA = [["en", "Inglês"], ["es", "Espanhol"], ["fr", "Franc�
 
 /** Concepts as an Anki text import: Portuguese word in front, five languages behind. */
 export function tsvPoliglota(conceitos) {
-  const linhas = ["#separator:tab", "#html:true", "#guid column:1", "#tags column:4", "#columns:GUID\tFrente\tVerso\tTags"];
+  const linhas = [...CABECALHO];
   for (const c of [...conceitos].sort((a, b) => a.rank_en - b.rank_en)) {
     const frente = `<div style="font-size:2em">${esc(c.palavra_pt ?? c.conceito)}</div><div style="opacity:.6">${esc(c.classe_pt)}</div>`;
     const verso = LINGUAS_POLIGLOTA.map(([code, nome]) => {
@@ -67,7 +62,7 @@ export function tsvPoliglota(conceitos) {
       return `<div><span style="opacity:.6">${nome}:</span> ${esc(c[`palavra_${code}`] ?? "—")}${marca}</div>`;
     }).join("");
     // Its own GUID namespace: never collides with the .apkg deck's notes.
-    linhas.push([`wwl-poli-txt-${c.conceito}-${c.classe}`, frente, verso, `wwl::poliglota classe::${c.classe_pt.replace(/ /g, "_")}`].map(campo).join("\t"));
+    linhas.push([frente, verso, `wwl::poliglota classe::${c.classe_pt.replace(/ /g, "_")}`, `wwl-poli-txt-${c.conceito}-${c.classe}`].map(campo).join("\t"));
   }
   return linhas.join("\n") + "\n";
 }

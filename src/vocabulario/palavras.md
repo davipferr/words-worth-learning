@@ -107,7 +107,7 @@ p
 
 ## Levar para o Anki
 
-As ${num(busca.length)} palavras filtradas acima podem ir para o Anki num arquivo de texto. No Anki, use **Arquivo → Importar**, escolha o tipo de nota **Básico** e um baralho. A frente do cartão tem a palavra; o verso, pronúncia, definições e frase de exemplo. Para os baralhos prontos, com leitura em voz alta, veja [Baralhos Anki](./anki).
+As ${num(busca.length)} palavras filtradas acima podem ir para o Anki num arquivo de texto. No Anki, use **Arquivo → Importar**, escolha o tipo de nota **Básico** e um baralho. A frente do cartão tem uma frase de exemplo com a palavra; o verso, a tradução da frase e a palavra em destaque com sua posição em frequência. Palavras sem frase de exemplo ficam com a palavra na frente e as definições no verso. Para os baralhos prontos, com leitura em voz alta, veja [Baralhos Anki](./anki).
 
 ```js
 const exportar = view(Inputs.button(`Baixar ${num(busca.length)} palavras (.txt para o Anki)`, {value: null, reduce: () => baixar(`palavras-${lingua.codigo}.txt`, tsvAnki(busca, frases, lingua))}));
