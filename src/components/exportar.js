@@ -19,28 +19,33 @@ const CABECALHO = ["#separator:tab", "#html:true", "#tags column:3", "#guid colu
 /** A sentence's translation into the language with code `codigo` (null if Tatoeba has none). */
 export const traducao = (f, codigo) => f[`trad_${codigo}`] ?? null;
 
-/** Each word of `lingua` -> its first example sentence translated into `codigo`. */
-export function frasesTraduzidas(frases, lingua, codigo) {
+/** Each word of `lingua` -> the example sentence for its card: the first one
+ * translated into `codigo`, else its first one (shown without translation). */
+export function frasesDosCartoes(frases, lingua, codigo) {
   const out = new Map();
   for (const f of [...frases].sort((a, b) => a.ordem - b.ordem)) {
-    if (f.lingua === lingua.codigo && !out.has(f.lema) && traducao(f, codigo)) out.set(f.lema, f);
+    if (f.lingua !== lingua.codigo) continue;
+    const atual = out.get(f.lema);
+    if (!atual || (!traducao(atual, codigo) && traducao(f, codigo))) out.set(f.lema, f);
   }
   return out;
 }
 
 /** `codigo`: the language the sentences are translated into on the back. */
 export function tsvAnki(palavras, frases, lingua, codigo = "pt") {
-  const comTraducao = frasesTraduzidas(frases, lingua, codigo);
+  const doCartao = frasesDosCartoes(frases, lingua, codigo);
   const linhas = [...CABECALHO];
   for (const p of [...palavras].sort((a, b) => a.rank - b.rank)) {
-    const f = comTraducao.get(p.lema);
-    // Example sentence in front, its translation behind, plus which word the card
-    // is about. Words without a translated example fall back to word / definitions.
+    const f = doCartao.get(p.lema);
+    // Example sentence in front, its translation behind (or a note to look it
+    // up), plus which word the card is about. Words without any example fall
+    // back to word / definitions.
     const rodape = `<div style="opacity:.6;font-size:.8em"><b>${esc(p.lema)}</b> · nº ${p.rank} em frequência</div>`;
     let frente, verso;
     if (f) {
+      const t = traducao(f, codigo);
       frente = `<div style="font-size:1.5em">${esc(f.texto)}</div>`;
-      verso = `<div style="font-size:1.5em">${esc(traducao(f, codigo))}</div>${rodape}`;
+      verso = `<div style="font-size:1.5em">${t ? esc(t) : `<i style="opacity:.6">(without translation)</i>`}</div>${rodape}`;
     } else {
       const defs = (p.definicao || "").split(" · ").map((g) => `<li>${esc(g)}</li>`).join("");
       frente = `<div style="font-size:2em">${esc(p.lema)}</div><div style="opacity:.6">${esc(p.classe_pt)}</div>`;

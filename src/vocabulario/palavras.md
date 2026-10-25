@@ -8,7 +8,7 @@ toc: false
 ```js
 import {parquet} from "../components/parquet.js";
 import {destaque, GENEROS, LINGUAS, num, num1, pct, pctd, resultados, rows} from "../components/format.js";
-import {tsvAnki, baixar, frasesTraduzidas, traducao} from "../components/exportar.js";
+import {tsvAnki, baixar, frasesDosCartoes, traducao} from "../components/exportar.js";
 
 const palavras = rows(await parquet(FileAttachment("../data/palavras.parquet")));
 const frases = rows(await parquet(FileAttachment("../data/frases.parquet")));
@@ -64,7 +64,8 @@ const metas = ["50", "80", "90"].map((m) => {
 const filtros = view(
   Inputs.form(
     {
-      classes: Inputs.select(classes, {label: "Classe", multiple: true, value: [], width: 220}),
+      // "Selecione" (null) means every class, and picking it again clears the filter.
+      classe: Inputs.select([null, ...classes], {label: "Classe", format: (c) => c ?? "Selecione"}),
       faixa: Inputs.select(new Map([["Todas (1–5.000)", [1, 5000]], ...metas, ["1–500", [1, 500]], ["501–1.000", [501, 1000]], ["1.001–2.000", [1001, 2000]], ["2.001–3.000", [2001, 3000]], ["3.001–5.000", [3001, 5000]]]), {label: "Posição"}),
       frase: Inputs.toggle({label: "Só com frase de exemplo"})
     },
@@ -75,7 +76,7 @@ const filtros = view(
 
 ```js
 const filtradas = daLingua.filter(
-  (d) => d.rank >= filtros.faixa[0] && d.rank <= filtros.faixa[1] && (!filtros.classes.length || filtros.classes.includes(d.classe_pt)) && (!filtros.frase || d.frase)
+  (d) => d.rank >= filtros.faixa[0] && d.rank <= filtros.faixa[1] && (!filtros.classe || d.classe_pt === filtros.classe) && (!filtros.frase || d.frase)
 );
 const busca = view(Inputs.search(filtradas, {placeholder: "Buscar palavra ou definição…", columns: ["lema", "formas", "definicao"], format: resultados, width: 340}));
 ```
@@ -125,19 +126,20 @@ p
 
 ## Levar para o Anki
 
-As ${num(busca.length)} palavras filtradas acima podem ir para o Anki num arquivo de texto. No Anki, use **Arquivo → Importar**, escolha o tipo de nota **Básico** e um baralho. A frente do cartão tem uma frase de exemplo com a palavra; o verso, a tradução da frase (na língua escolhida em **Tradução das frases**, no alto da página) e a palavra em destaque com sua posição em frequência. Palavras sem frase de exemplo traduzida nessa língua ficam com a palavra na frente e as definições no verso. Para os baralhos prontos, com leitura em voz alta, veja [Baralhos Anki](./anki).
+As ${num(busca.length)} palavras filtradas acima podem ir para o Anki num arquivo de texto. No Anki, use **Arquivo → Importar**, escolha o tipo de nota **Básico** e um baralho. A frente do cartão tem uma frase de exemplo com a palavra; o verso, a tradução da frase (na língua escolhida em **Tradução das frases**, no alto da página) e a palavra em destaque com sua posição em frequência. Quando o Tatoeba não tem a frase traduzida nessa língua, o verso mostra *(without translation)*, para você procurar a tradução. Palavras sem nenhuma frase de exemplo ficam com a palavra na frente e as definições no verso. Para os baralhos prontos, com leitura em voz alta, veja [Baralhos Anki](./anki).
 
 ```js
-const comTraducao = frasesTraduzidas(frases, lingua, traducaoEm.codigo);
-const semTraducao = busca.filter((d) => !comTraducao.has(d.lema)).length;
+const doCartao = frasesDosCartoes(frases, lingua, traducaoEm.codigo);
+// Words whose card sentence has no translation in the chosen language.
+const semTraducao = busca.filter((d) => doCartao.has(d.lema) && !traducao(doCartao.get(d.lema), traducaoEm.codigo)).length;
 // Shown here and under the "Tradução das frases" select; a function because a
 // DOM node can only be in one place. Always an element (an empty one when all is
 // well): a block that displays nothing keeps showing its previous output.
 const aviso = () =>
   traducaoEm.codigo === lingua.codigo
-    ? html`<div class="warning">As frases de exemplo já estão em ${lingua.nome}, e o Tatoeba não traduz uma frase para a própria língua: nenhuma frase terá tradução. No Anki, todos os cartões vão com a palavra na frente e as definições no verso.</div>`
+    ? html`<div class="warning">As frases de exemplo já estão em ${lingua.nome}, e o Tatoeba não traduz uma frase para a própria língua: nenhuma frase terá tradução. No Anki, o verso dos cartões com frase mostra "(without translation)".</div>`
     : semTraducao
-      ? html`<div class="warning">${num(semTraducao)} das ${num(busca.length)} palavras filtradas não têm frase de exemplo com tradução em ${traducaoEm.nome} no Tatoeba. Elas vão para o Anki com a palavra na frente e as definições no verso.</div>`
+      ? html`<div class="warning">${num(semTraducao)} das ${num(busca.length)} palavras filtradas têm frase de exemplo sem tradução em ${traducaoEm.nome} no Tatoeba. No Anki, o verso delas mostra "(without translation)".</div>`
       : html`<span></span>`;
 ```
 
