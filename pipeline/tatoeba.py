@@ -74,16 +74,19 @@ def translated(src: pl.DataFrame, links_: pl.DataFrame, dst: pl.DataFrame, name:
     )
 
 
-def with_translations(lang3: str, pt: pl.DataFrame, en: pl.DataFrame | None) -> pl.DataFrame:
-    """Sentences of ``lang3`` that have a Portuguese or (fallback) English translation.
+def with_translations(lang3: str, others: dict[str, tuple[str, pl.DataFrame]]) -> pl.DataFrame:
+    """Sentences of ``lang3`` that have a Portuguese or (fallback) English translation,
+    with their translation into every language of ``others`` (``trad_<code>``).
 
-    ``pt``/``en`` are the Portuguese and English sentence tables; ``en`` is None
-    when the target language is English itself.
+    ``others`` maps a site code to its Tatoeba code and sentence table, and must
+    include "pt" and "en" unless one of them is ``lang3`` itself; the language's
+    own column is all nulls.
     """
     src = sentences(lang3)
-    out = src.join(translated(src, links(lang3, "por"), pt, "trad_pt"), on="id", how="left")
-    if en is not None:
-        out = out.join(translated(src, links(lang3, "eng"), en, "trad_en"), on="id", how="left")
-    else:
-        out = out.with_columns(pl.lit(None, pl.String).alias("trad_en"))
+    out = src
+    for code, (other3, table) in others.items():
+        if other3 == lang3:
+            out = out.with_columns(pl.lit(None, pl.String).alias(f"trad_{code}"))
+        else:
+            out = out.join(translated(src, links(lang3, other3), table, f"trad_{code}"), on="id", how="left")
     return out.filter(pl.col("trad_pt").is_not_null() | pl.col("trad_en").is_not_null())

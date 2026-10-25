@@ -23,3 +23,5 @@ def test_prefers_translated_sentence_within_reach():
     assert casa.filter(pl.col("frase_id") == 1)["dificuldade"].item() == 4000
     # The English-only sentence comes last.
     assert casa["frase_id"].to_list()[-1] == 2
+    # Every translation is kept for the site's translation-language choice.
+    assert casa.filter(pl.col("frase_id") == 2)["trad_en"].item() == "Tom is house."

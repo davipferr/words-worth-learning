@@ -112,20 +112,22 @@ UPOS_CLASSE = {
 }  # fmt: skip
 
 
-def frases_pt() -> pl.DataFrame:
-    return memo("tatoeba-por", lambda: tatoeba.sentences(PT.tatoeba), deps=("tatoeba",), max_age=RAW_AGE)
+def frases_tatoeba(lang: Lang) -> pl.DataFrame:
+    return memo(f"tatoeba-{lang.tatoeba}", lambda: tatoeba.sentences(lang.tatoeba), deps=("tatoeba",), max_age=RAW_AGE)
 
 
-def frases_en() -> pl.DataFrame:
-    return memo("tatoeba-eng", lambda: tatoeba.sentences("eng"), deps=("tatoeba",), max_age=RAW_AGE)
+# Languages example sentences are translated into: Portuguese first, then the
+# site's languages (a learner may study one language through another).
+LINGUAS_TRADUCAO = [PT, *LANGS.values()]
 
 
 def frases_traduzidas(lang: Lang) -> pl.DataFrame:
-    """Tatoeba sentences of the language with a Portuguese or English translation."""
+    """Tatoeba sentences of the language with a Portuguese or English translation,
+    and their translations into every language of ``LINGUAS_TRADUCAO``."""
     return memo(
         f"tatoeba-traduzidas-{lang.code}",
-        lambda: tatoeba.with_translations(lang.tatoeba, frases_pt(), None if lang.code == "en" else frases_en()),
-        deps=("tatoeba",),
+        lambda: tatoeba.with_translations(lang.tatoeba, {o.code: (o.tatoeba, frases_tatoeba(o)) for o in LINGUAS_TRADUCAO}),
+        deps=("tatoeba", "langs"),
         max_age=RAW_AGE,
     )
 

@@ -8,7 +8,7 @@ toc: false
 ```js
 import {parquet} from "../components/parquet.js";
 import {destaque, GENEROS, LINGUAS, num, num1, pct, pctd, resultados, rows} from "../components/format.js";
-import {tsvAnki, baixar} from "../components/exportar.js";
+import {tsvAnki, baixar, frasesTraduzidas, traducao} from "../components/exportar.js";
 
 const palavras = rows(await parquet(FileAttachment("../data/palavras.parquet")));
 const frases = rows(await parquet(FileAttachment("../data/frases.parquet")));
@@ -27,8 +27,26 @@ const lingua = view(
 ```
 
 ```js
+// The language example sentences are translated into: Portuguese, or another
+// language to study one through the other (Spanish through English…).
+const LINGUAS_TRADUCAO = [{codigo: "pt", nome: "Português"}, ...LINGUAS];
+let lembradaTraducao;
+try {
+  lembradaTraducao = sessionStorage.getItem("traducao");
+} catch {}
+const traducaoEm = view(
+  Inputs.select(LINGUAS_TRADUCAO, {label: "Tradução das frases", format: (l) => l.nome, value: LINGUAS_TRADUCAO.find((l) => l.codigo === lembradaTraducao) ?? LINGUAS_TRADUCAO[0]})
+);
+```
+
+```js
+aviso()
+```
+
+```js
 try {
   sessionStorage.setItem("lingua", lingua.codigo);
+  sessionStorage.setItem("traducao", traducaoEm.codigo);
 } catch {}
 const daLingua = palavras.filter((d) => d.lingua === lingua.codigo);
 const classes = d3.rollups(daLingua, (v) => v.length, (d) => d.classe_pt).sort((a, b) => b[1] - a[1]).map(([c]) => c);
@@ -98,7 +116,7 @@ p
       ${p.etimo ? html`<p class="small muted"><strong>Etimologia:</strong> ${p.etimo}.</p>` : ""}
       ${exemplos.length
         ? html`<h3>Frases de exemplo</h3>${exemplos.map(
-            (f) => html`<p class="frase">${destaque(f.texto, f.forma)}<br><span class="muted">${f.traducao}${f.lingua_traducao === "en" ? " (inglês)" : ""}</span> <a class="small muted" href=${`https://tatoeba.org/pt-br/sentences/show/${f.frase_id}`}>Tatoeba</a></p>`
+            (f) => html`<p class="frase">${destaque(f.texto, f.forma)}<br><span class="muted">${traducao(f, traducaoEm.codigo) ?? html`<i>sem tradução em ${traducaoEm.nome} no Tatoeba</i>`}</span> <a class="small muted" href=${`https://tatoeba.org/pt-br/sentences/show/${f.frase_id}`}>Tatoeba</a></p>`
           )}`
         : html`<p class="muted">O Tatoeba não tem uma frase curta com tradução para esta palavra.</p>`}
     </div>`
@@ -107,10 +125,28 @@ p
 
 ## Levar para o Anki
 
-As ${num(busca.length)} palavras filtradas acima podem ir para o Anki num arquivo de texto. No Anki, use **Arquivo → Importar**, escolha o tipo de nota **Básico** e um baralho. A frente do cartão tem uma frase de exemplo com a palavra; o verso, a tradução da frase e a palavra em destaque com sua posição em frequência. Palavras sem frase de exemplo ficam com a palavra na frente e as definições no verso. Para os baralhos prontos, com leitura em voz alta, veja [Baralhos Anki](./anki).
+As ${num(busca.length)} palavras filtradas acima podem ir para o Anki num arquivo de texto. No Anki, use **Arquivo → Importar**, escolha o tipo de nota **Básico** e um baralho. A frente do cartão tem uma frase de exemplo com a palavra; o verso, a tradução da frase (na língua escolhida em **Tradução das frases**, no alto da página) e a palavra em destaque com sua posição em frequência. Palavras sem frase de exemplo traduzida nessa língua ficam com a palavra na frente e as definições no verso. Para os baralhos prontos, com leitura em voz alta, veja [Baralhos Anki](./anki).
 
 ```js
-const exportar = view(Inputs.button(`Baixar ${num(busca.length)} palavras (.txt para o Anki)`, {value: null, reduce: () => baixar(`palavras-${lingua.codigo}.txt`, tsvAnki(busca, frases, lingua))}));
+const comTraducao = frasesTraduzidas(frases, lingua, traducaoEm.codigo);
+const semTraducao = busca.filter((d) => !comTraducao.has(d.lema)).length;
+// Shown here and under the "Tradução das frases" select; a function because a
+// DOM node can only be in one place. Always an element (an empty one when all is
+// well): a block that displays nothing keeps showing its previous output.
+const aviso = () =>
+  traducaoEm.codigo === lingua.codigo
+    ? html`<div class="warning">As frases de exemplo já estão em ${lingua.nome}, e o Tatoeba não traduz uma frase para a própria língua: nenhuma frase terá tradução. No Anki, todos os cartões vão com a palavra na frente e as definições no verso.</div>`
+    : semTraducao
+      ? html`<div class="warning">${num(semTraducao)} das ${num(busca.length)} palavras filtradas não têm frase de exemplo com tradução em ${traducaoEm.nome} no Tatoeba. Elas vão para o Anki com a palavra na frente e as definições no verso.</div>`
+      : html`<span></span>`;
+```
+
+```js
+aviso()
+```
+
+```js
+const exportar = view(Inputs.button(`Baixar ${num(busca.length)} palavras (.txt para o Anki)`, {value: null, reduce: () => baixar(`palavras-${lingua.codigo}-${traducaoEm.codigo}.txt`, tsvAnki(busca, frases, lingua, traducaoEm.codigo))}));
 ```
 
 <p class="muted small">O arquivo usa os cabeçalhos de importação do Anki (2.1.55 ou mais novo, ou AnkiDroid 2.17+): campos em HTML, separados por tabulação, e um identificador fixo por palavra. Importar de novo uma lista que já foi importada atualiza os cartões existentes em vez de duplicá-los.</p>

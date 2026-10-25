@@ -96,6 +96,7 @@ def choose(sentences: pl.DataFrame, formas_lemas: pl.DataFrame, lemas: pl.DataFr
             pl.coalesce("trad_pt", "trad_en").alias("traducao"),
             pl.when(pl.col("trad_pt").is_not_null()).then(pl.lit("pt")).otherwise(pl.lit("en")).alias("lingua_traducao"),
             pl.col("dificuldade").replace(UNKNOWN, None), "ao_alcance",
+            pl.col("^trad_.*$"),  # the sentence in every translation language
         )
         .sort("rank", "ordem")
     )  # fmt: skip
